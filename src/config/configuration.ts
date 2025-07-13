@@ -14,8 +14,8 @@ export default () => ({
     memoryCost: 65536,
   },
   throttle: {
-    ttl: parseInt(process.env.THROTTLE_TTL, 10) || 60, // Time window in seconds
-    limit: parseInt(process.env.THROTTLE_LIMIT, 10) || 10, // Max requests per window
+    ttl: parseInt(process.env.THROTTLE_TTL, 10) || 60,
+    limit: parseInt(process.env.THROTTLE_LIMIT, 10) || 10,
   },
   cors: {
     origin: process.env.ALLOWED_ORIGINS?.split(',') || [
