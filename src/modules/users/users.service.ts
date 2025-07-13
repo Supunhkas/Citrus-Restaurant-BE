@@ -1,0 +1,157 @@
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { User, UserDocument } from '../../schema/user/user.schema';
+import { RegisterDto } from '../auth/dto/register.dto';
+import * as argon2 from 'argon2';
+import { ConfigService } from '@nestjs/config';
+import { randomBytes } from 'crypto';
+
+@Injectable()
+export class UsersService {
+  constructor(
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
+    private configService: ConfigService,
+  ) {}
+
+  async create(registerDto: RegisterDto): Promise<User> {
+    const { email, password, firstName, lastName } = registerDto;
+
+    // Check if user already exists
+    const existingUser = await this.findByEmail(email);
+    if (existingUser) {
+      throw new ConflictException('User with this email already exists');
+    }
+
+    // Hash password
+    const hashedPassword = await this.hashPassword(password);
+
+    // Generate email verification token
+    const emailVerificationToken = randomBytes(32).toString('hex');
+
+    // Create user
+    const user = new this.userModel({
+      email,
+      password: hashedPassword,
+      firstName,
+      lastName,
+      emailVerificationToken,
+    });
+
+    return user.save();
+  }
+
+  async findByEmail(email: string): Promise<User | null> {
+    return this.userModel.findOne({ email: email.toLowerCase() }).exec();
+  }
+
+  async findById(id: string): Promise<User | null> {
+    return this.userModel.findById(id).exec();
+  }
+
+  async updateLastLogin(userId: string): Promise<void> {
+    await this.userModel.findByIdAndUpdate(userId, {
+      lastLoginAt: new Date(),
+    });
+  }
+
+  async verifyEmail(token: string): Promise<User> {
+    const user = await this.userModel.findOne({
+      emailVerificationToken: token,
+    });
+
+    if (!user) {
+      throw new NotFoundException('Invalid verification token');
+    }
+
+    user.isEmailVerified = true;
+    user.emailVerificationToken = undefined;
+    return this.userModel.findByIdAndUpdate(
+      user._id,
+      { isEmailVerified: true, emailVerificationToken: undefined },
+      { new: true },
+    );
+  }
+
+  async generatePasswordResetToken(email: string): Promise<string> {
+    const user = await this.findByEmail(email);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const resetToken = randomBytes(32).toString('hex');
+    const resetExpires = new Date(Date.now() + 3600000); // 1 hour
+
+    await this.userModel.findByIdAndUpdate((user as any)._id, {
+      passwordResetToken: resetToken,
+      passwordResetExpires: resetExpires,
+    });
+
+    return resetToken;
+  }
+
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    const user = await this.userModel.findOne({
+      passwordResetToken: token,
+      passwordResetExpires: { $gt: new Date() },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Invalid or expired reset token');
+    }
+
+    const hashedPassword = await this.hashPassword(newPassword);
+    user.password = hashedPassword;
+    user.passwordResetToken = undefined;
+    user.passwordResetExpires = undefined;
+    await user.save();
+  }
+
+  async updateProfile(
+    userId: string,
+    updateData: Partial<User>,
+  ): Promise<User> {
+    const user = await this.userModel.findByIdAndUpdate(
+      userId,
+      { $set: updateData },
+      { new: true },
+    );
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return user;
+  }
+
+  async deactivateUser(userId: string): Promise<void> {
+    const user = await this.userModel.findByIdAndUpdate(
+      userId,
+      { isActive: false },
+      { new: true },
+    );
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+  }
+
+  private async hashPassword(password: string): Promise<string> {
+    const argon2Config = this.configService.get('argon2');
+    return argon2.hash(password, {
+      timeCost: argon2Config.timeCost,
+      memoryCost: argon2Config.memoryCost,
+    });
+  }
+
+  async verifyPassword(
+    plainPassword: string,
+    hashedPassword: string,
+  ): Promise<boolean> {
+    return argon2.verify(hashedPassword, plainPassword);
+  }
+}
