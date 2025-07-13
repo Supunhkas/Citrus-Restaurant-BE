@@ -23,6 +23,20 @@ export default () => ({
     ],
     credentials: true,
   },
+  email: {
+    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.EMAIL_PORT, 10) || 587,
+    secure: process.env.EMAIL_SECURE === 'true',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+    from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+  },
+  app: {
+    name: process.env.APP_NAME || 'Citrus Restaurant',
+    url: process.env.APP_URL || 'http://localhost:3000',
+  },
   security: {
     helmet: {
       contentSecurityPolicy: {

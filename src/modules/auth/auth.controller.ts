@@ -12,6 +12,8 @@ import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { AuthThrottleGuard } from './guards/auth-throttle.guard';
@@ -61,17 +63,20 @@ export class AuthController {
   @UseGuards(AuthThrottleGuard)
   @HttpCode(HttpStatus.OK)
   async forgotPassword(
-    @Body() body: { email: string },
+    @Body() forgotPasswordDto: ForgotPasswordDto,
   ): Promise<{ message: string }> {
-    return this.authService.forgotPassword(body.email);
+    return this.authService.forgotPassword(forgotPasswordDto.email);
   }
 
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
   async resetPassword(
-    @Body() body: { token: string; newPassword: string },
+    @Body() resetPasswordDto: ResetPasswordDto,
   ): Promise<{ message: string }> {
-    return this.authService.resetPassword(body.token, body.newPassword);
+    return this.authService.resetPassword(
+      resetPasswordDto.token,
+      resetPasswordDto.newPassword,
+    );
   }
 
   @Get('profile')

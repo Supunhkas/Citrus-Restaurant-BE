@@ -1,21 +1,33 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../users/users.service';
+import { EmailService } from '../email/email.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private emailService: EmailService,
   ) {}
 
   async register(registerDto: RegisterDto): Promise<AuthResponseDto> {
     const user = await this.usersService.create(registerDto);
+
+    // Send email verification
+    if (user.emailVerificationToken) {
+      await this.emailService.sendEmailVerification(
+        user.email,
+        user.emailVerificationToken,
+      );
+    }
 
     const tokens = await this.generateTokens(user);
 
@@ -93,13 +105,23 @@ export class AuthService {
   }
 
   async verifyEmail(token: string): Promise<{ message: string }> {
-    await this.usersService.verifyEmail(token);
+    const user = await this.usersService.verifyEmail(token);
+
+    // Send welcome email after verification
+    if (user.isEmailVerified) {
+      await this.emailService.sendWelcomeEmail(user.email, user.firstName);
+    }
+
     return { message: 'Email verified successfully' };
   }
 
   async forgotPassword(email: string): Promise<{ message: string }> {
-    await this.usersService.generatePasswordResetToken(email);
-    // In a real application, you would send an email here
+    const resetToken =
+      await this.usersService.generatePasswordResetToken(email);
+
+    // Send password reset email
+    await this.emailService.sendPasswordReset(email, resetToken);
+
     return { message: 'Password reset instructions sent to your email' };
   }
 
@@ -113,7 +135,7 @@ export class AuthService {
 
   async logout(userId: string): Promise<{ message: string }> {
     // In a real application, you might want to blacklist the refresh token
-    console.log(userId);
+    this.logger.log(`User logout: ${userId}`);
     return { message: 'Logged out successfully' };
   }
 
