@@ -4,6 +4,7 @@ import {
   HealthCheckService,
   MongooseHealthIndicator,
 } from '@nestjs/terminus';
+import { Public } from '../common/decorators/public.decorator';
 
 @Controller('health')
 export class HealthController {
@@ -12,6 +13,7 @@ export class HealthController {
     private mongoose: MongooseHealthIndicator,
   ) {}
 
+  @Public()
   @Get()
   @HealthCheck()
   check() {
@@ -21,6 +23,7 @@ export class HealthController {
     ]);
   }
 
+  @Public()
   @Get('liveness')
   @HealthCheck()
   liveness() {
@@ -30,6 +33,7 @@ export class HealthController {
     ]);
   }
 
+  @Public()
   @Get('readiness')
   @HealthCheck()
   readiness() {

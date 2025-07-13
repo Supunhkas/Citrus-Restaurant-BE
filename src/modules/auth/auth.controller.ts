@@ -14,14 +14,16 @@ import { LoginDto } from './dto/login.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
-import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
+
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { AuthThrottleGuard } from './guards/auth-throttle.guard';
+import { Public } from 'src/common/decorators/public.decorator';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @Public()
   @Post('register')
   @UseGuards(AuthThrottleGuard)
   @HttpCode(HttpStatus.CREATED)
@@ -29,6 +31,7 @@ export class AuthController {
     return this.authService.register(registerDto);
   }
 
+  @Public()
   @Post('login')
   @UseGuards(AuthThrottleGuard)
   @HttpCode(HttpStatus.OK)
@@ -36,6 +39,7 @@ export class AuthController {
     return this.authService.login(loginDto);
   }
 
+  @Public()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   async refreshToken(
@@ -45,12 +49,12 @@ export class AuthController {
   }
 
   @Post('logout')
-  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async logout(@CurrentUser() user: any): Promise<{ message: string }> {
     return this.authService.logout(user.id);
   }
 
+  @Public()
   @Get('verify-email/:token')
   @HttpCode(HttpStatus.OK)
   async verifyEmail(
@@ -59,6 +63,7 @@ export class AuthController {
     return this.authService.verifyEmail(token);
   }
 
+  @Public()
   @Post('forgot-password')
   @UseGuards(AuthThrottleGuard)
   @HttpCode(HttpStatus.OK)
@@ -68,6 +73,7 @@ export class AuthController {
     return this.authService.forgotPassword(forgotPasswordDto.email);
   }
 
+  @Public()
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
   async resetPassword(
@@ -80,7 +86,6 @@ export class AuthController {
   }
 
   @Get('profile')
-  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async getProfile(@CurrentUser() user: any): Promise<any> {
     return {

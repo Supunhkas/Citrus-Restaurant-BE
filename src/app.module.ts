@@ -9,6 +9,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { HealthModule } from './health/health.module';
 import { GlobalThrottlerGuard } from './common/guards/throttle.guard';
+import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import configuration from './config/configuration';
 
 @Module({
@@ -46,6 +47,10 @@ import configuration from './config/configuration';
     {
       provide: APP_GUARD,
       useClass: GlobalThrottlerGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
     },
   ],
 })
