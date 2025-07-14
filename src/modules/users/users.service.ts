@@ -19,7 +19,7 @@ export class UsersService {
   ) {}
 
   async create(registerDto: RegisterDto): Promise<User> {
-    const { email, password, firstName, lastName } = registerDto;
+    const { email, password, name } = registerDto;
 
     // Check if user already exists
     const existingUser = await this.findByEmail(email);
@@ -37,8 +37,7 @@ export class UsersService {
     const user = new this.userModel({
       email,
       password: hashedPassword,
-      firstName,
-      lastName,
+      name,
       emailVerificationToken,
     });
 

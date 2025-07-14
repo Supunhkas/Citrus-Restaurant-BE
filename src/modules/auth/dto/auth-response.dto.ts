@@ -8,10 +8,7 @@ export class AuthResponseDto {
   email: string;
 
   @Expose()
-  firstName: string;
-
-  @Expose()
-  lastName: string;
+  name: string;
 
   @Expose()
   role: string;

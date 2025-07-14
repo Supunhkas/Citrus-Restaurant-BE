@@ -34,8 +34,7 @@ export class AuthService {
     return new AuthResponseDto({
       id: (user as any)._id,
       email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
+      name: user.name,
       role: user.role,
       isEmailVerified: user.isEmailVerified,
       accessToken: tokens.accessToken,
@@ -67,8 +66,7 @@ export class AuthService {
     return new AuthResponseDto({
       id: (user as any)._id,
       email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
+      name: user.name,
       role: user.role,
       isEmailVerified: user.isEmailVerified,
       accessToken: tokens.accessToken,
@@ -92,8 +90,7 @@ export class AuthService {
       return new AuthResponseDto({
         id: (user as any)._id,
         email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
+        name: user.name,
         role: user.role,
         isEmailVerified: user.isEmailVerified,
         accessToken: tokens.accessToken,
@@ -109,7 +106,7 @@ export class AuthService {
 
     // Send welcome email after verification
     if (user.isEmailVerified) {
-      await this.emailService.sendWelcomeEmail(user.email, user.firstName);
+      await this.emailService.sendWelcomeEmail(user.email, user.name);
     }
 
     return { message: 'Email verified successfully' };

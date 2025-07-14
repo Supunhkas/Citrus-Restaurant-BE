@@ -12,10 +12,7 @@ export class User {
   password: string;
 
   @Prop({ required: true, trim: true })
-  firstName: string;
-
-  @Prop({ required: true, trim: true })
-  lastName: string;
+  name: string;
 
   @Prop({ default: false })
   isEmailVerified: boolean;

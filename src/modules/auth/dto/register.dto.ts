@@ -5,6 +5,7 @@ import {
   MinLength,
   MaxLength,
   Matches,
+  IsOptional,
 } from 'class-validator';
 
 export class RegisterDto {
@@ -22,15 +23,9 @@ export class RegisterDto {
   })
   password: string;
 
-  @IsString({ message: 'First name must be a string' })
-  @IsNotEmpty({ message: 'First name is required' })
-  @MinLength(2, { message: 'First name must be at least 2 characters long' })
-  @MaxLength(50, { message: 'First name must not exceed 50 characters' })
-  firstName: string;
-
-  @IsString({ message: 'Last name must be a string' })
-  @IsNotEmpty({ message: 'Last name is required' })
-  @MinLength(2, { message: 'Last name must be at least 2 characters long' })
-  @MaxLength(50, { message: 'Last name must not exceed 50 characters' })
-  lastName: string;
+  @IsString({ message: 'Name must be a string' })
+  @IsNotEmpty({ message: 'Name is required' })
+  @MinLength(2, { message: 'Name must be at least 2 characters long' })
+  @MaxLength(150, { message: 'Name must not exceed 150 characters' })
+  name: string;
 }
