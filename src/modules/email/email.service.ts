@@ -110,6 +110,45 @@ export class EmailService {
     });
   }
 
+  async sendReservationUpdate(
+    email: string,
+    update: {
+      name: string;
+      status: string;
+      reservationDate: string;
+      tableNumber: number;
+      reason?: string;
+    },
+  ): Promise<boolean> {
+    const appConfig = this.configService.get('app');
+    const { name, status, reservationDate, tableNumber, reason } = update;
+    const subject = `Reservation Update - ${appConfig.name}`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background-color: #f8f9fa; padding: 20px; text-align: center;">
+          <h1 style="color: #333; margin: 0;">${appConfig.name}</h1>
+        </div>
+        <div style="padding: 20px;">
+          <h2 style="color: #333;">Reservation Update</h2>
+          <p>Dear ${name},</p>
+          <p>Your reservation for table <b>${tableNumber}</b> on <b>${new Date(reservationDate).toLocaleString()}</b> has been <b>${status}</b>.</p>
+          ${reason ? `<p>Reason: ${reason}</p>` : ''}
+          <p>If you have any questions, please contact us.</p>
+        </div>
+        <div style="background-color: #f8f9fa; padding: 20px; text-align: center; color: #666; font-size: 12px;">
+          <p>© ${new Date().getFullYear()} ${appConfig.name}. All rights reserved.</p>
+        </div>
+      </div>
+    `;
+    const text = `Dear ${name},\nYour reservation for table ${tableNumber} on ${new Date(reservationDate).toLocaleString()} has been ${status}.${reason ? '\nReason: ' + reason : ''}\nIf you have any questions, please contact us.`;
+    return this.sendEmail({
+      to: email,
+      subject,
+      html,
+      text,
+    });
+  }
+
   private getEmailVerificationTemplate(verificationUrl: string): EmailTemplate {
     const appConfig = this.configService.get('app');
 

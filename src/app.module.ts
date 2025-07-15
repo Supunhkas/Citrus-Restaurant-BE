@@ -11,6 +11,7 @@ import { HealthModule } from './health/health.module';
 import { GlobalThrottlerGuard } from './common/guards/throttle.guard';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import configuration from './config/configuration';
+import { ReservationModule } from './modules/reservation/reservation.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import configuration from './config/configuration';
     AuthModule,
     UsersModule,
     HealthModule,
+    ReservationModule,
   ],
   controllers: [AppController],
   providers: [
