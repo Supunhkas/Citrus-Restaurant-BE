@@ -23,6 +23,9 @@ export class UsersService {
 
     // Check if user already exists
     const existingUser = await this.findByEmail(email);
+
+    console.log(existingUser);
+
     if (existingUser) {
       throw new ConflictException('User with this email already exists');
     }

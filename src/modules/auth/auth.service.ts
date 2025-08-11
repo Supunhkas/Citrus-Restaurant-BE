@@ -42,6 +42,46 @@ export class AuthService {
     });
   }
 
+  async adminLogin(loginDto: LoginDto): Promise<AuthResponseDto> {
+    const { email, password } = loginDto;
+
+    const user = await this.usersService.findByEmail(email);
+    console.log(user);
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (user.role !== 'admin') {
+      throw new UnauthorizedException('This user not an Admin user');
+    }
+
+    const isPasswordValid = await this.usersService.verifyPassword(
+      password,
+      user.password,
+    );
+    console.log(isPasswordValid);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // Update last login
+    await this.usersService.updateLastLogin((user as any)._id);
+
+    const tokens = await this.generateTokens(user);
+    console.log('log success');
+    const response = new AuthResponseDto({
+      id: (user as any)._id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      isEmailVerified: user.isEmailVerified,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+    });
+
+    console.log(response);
+    return response;
+  }
   async login(loginDto: LoginDto): Promise<AuthResponseDto> {
     const { email, password } = loginDto;
 

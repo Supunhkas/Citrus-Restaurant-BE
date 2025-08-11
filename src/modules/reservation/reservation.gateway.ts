@@ -15,7 +15,7 @@ export class ReservationGateway
   server: Server;
 
   afterInit(server: Server) {
-    console.log('Gateway initialized', server);
+    console.log('Gateway initialized');
     // Gateway initialized
   }
 

@@ -38,14 +38,14 @@ export class EmailService {
     });
 
     // Verify connection configuration
-    // this.transporter.verify((error, success) => {
-    //   if (error) {
-    //     this.logger.error('Email transporter verification failed:', error);
-    //   } else {
-    //     console.log(success);
-    //     this.logger.log('Email transporter is ready to send messages');
-    //   }
-    // });
+    this.transporter.verify((error, success) => {
+      if (error) {
+        this.logger.error('Email transporter verification failed:', error);
+      } else {
+        console.log(success);
+        this.logger.log('Email transporter is ready to send messages');
+      }
+    });
   }
 
   async sendEmail(options: EmailOptions): Promise<boolean> {

@@ -33,7 +33,7 @@ async function bootstrap() {
 
   // CORS configuration
   const corsConfig = configService.get('cors');
-  app.enableCors(corsConfig);
+  app.enableCors();
 
   // Request size limits
   app.use((req, res, next) => {

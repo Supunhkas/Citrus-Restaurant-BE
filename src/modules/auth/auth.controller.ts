@@ -28,7 +28,6 @@ export class AuthController {
   @UseGuards(AuthThrottleGuard)
   @HttpCode(HttpStatus.CREATED)
   async register(@Body() registerDto: RegisterDto): Promise<AuthResponseDto> {
-    console.log('registerDto', registerDto);
     return this.authService.register(registerDto);
   }
 
@@ -38,6 +37,15 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async login(@Body() loginDto: LoginDto): Promise<AuthResponseDto> {
     return this.authService.login(loginDto);
+  }
+
+  @Public()
+  @Post('admin-login')
+  @UseGuards(AuthThrottleGuard)
+  @HttpCode(HttpStatus.OK)
+  async adminLogin(@Body() loginDto: any): Promise<AuthResponseDto> {
+    console.log(loginDto);
+    return this.authService.adminLogin(loginDto);
   }
 
   @Public()
