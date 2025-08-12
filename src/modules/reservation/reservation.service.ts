@@ -46,18 +46,8 @@ export class ReservationService {
     }
   }
 
-  // Create a new reservation
+  //! Create a new reservation
   async createReservation(dto: any): Promise<Reservation> {
-    const existing = await this.reservationModel.findOne({
-      tableNumber: dto.tableNumber,
-      reservationDate: dto.reservationDate,
-      status: ReservationStatus.APPROVED,
-    });
-    if (existing) {
-      throw new ConflictException(
-        'Table is already reserved for this date/time',
-      );
-    }
     const confirmationCode = this.generateConfirmationCode();
     const reservation = new this.reservationModel({
       ...dto,
@@ -82,21 +72,63 @@ export class ReservationService {
     return reservation;
   }
 
+  //! Confirm a reservation
   async confirmReservation(confirmationCode: string): Promise<Reservation> {
     const reservation = await this.reservationModel.findOne({
       confirmationCode,
     });
+
+
     if (!reservation) {
       throw new ConflictException('Invalid confirmation code');
     }
+
+    // Time restriction: confirmation must be within 1 hour of creation
+    const createdAt = reservation.get('createdAt');
+    if (createdAt) {
+      const createdTime = new Date(createdAt).getTime();
+      const now = Date.now();
+      const oneHour = 60 * 60 * 1000;
+      if (now - createdTime > oneHour) {
+        throw new ConflictException('Confirmation code expired. Please create a new reservation.');
+      }
+    }
+
     if (reservation.status !== ReservationStatus.PENDING) {
       throw new ConflictException('Reservation is not pending');
     }
+
     reservation.status = ReservationStatus.CONFIRMED;
     await reservation.save();
+
+    // Send confirmation email to user with reservation details
+    if (reservation.email) {
+      await this.emailService.sendEmail({
+        to: reservation.email,
+        subject: 'Your Reservation is Confirmed',
+        html: `<h2>Reservation Confirmed</h2>
+          <p>Dear ${reservation.name || 'Guest'},</p>
+          <p>Your reservation has been successfully confirmed.</p>
+          <ul>
+            <li><b>Date:</b> ${reservation.reservationDate ? new Date(reservation.reservationDate).toLocaleString() : 'N/A'}</li>
+            <li><b>Table Number:</b> ${reservation.tableNumber || 'N/A'}</li>
+            <li><b>Confirmation Code:</b> ${reservation.confirmationCode}</li>
+          </ul>
+          <p>Thank you for choosing Citrus Restaurant!</p>`
+      });
+    }
+
+    // Notify all admins via FCM
+    await this.notifyAdminsFCM(
+      'Reservation Confirmed',
+      `Reservation for table ${reservation.tableNumber} on ${reservation.reservationDate ? new Date(reservation.reservationDate).toLocaleString() : ''} has been confirmed.`,
+      { reservationId: reservation._id.toString() },
+    );
+
     return reservation;
   }
 
+  //! Get all reservations
   async getReservations(
     userId?: Types.ObjectId,
     status?: ReservationStatus,
@@ -121,6 +153,7 @@ export class ReservationService {
       .exec();
   }
 
+  //! Approve a reservation
   async approveReservation(reservationId: string): Promise<Reservation> {
     const reservation = await this.reservationModel.findById(reservationId);
     if (!reservation) {
@@ -152,6 +185,7 @@ export class ReservationService {
     return reservation;
   }
 
+  //! Reject a reservation
   async rejectReservation(
     reservationId: string,
     reason?: string,
@@ -187,6 +221,7 @@ export class ReservationService {
     return reservation;
   }
 
+  //! Resend confirmation
   async resendConfirmation(contact: string): Promise<void> {
     const reservation = await this.reservationModel.findOne({
       $or: [{ contactNumber: contact }, { email: contact }],

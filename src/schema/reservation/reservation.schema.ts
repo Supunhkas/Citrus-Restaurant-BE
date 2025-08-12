@@ -23,16 +23,15 @@ export class Reservation {
   name: string;
 
   // Contact phone number (required)
-  @Prop({ required: true, trim: true })
+  @Prop({ required: false, trim: true })
   contactNumber: string;
 
   // Email (optional)
-  @Prop({ required: false, trim: true, lowercase: true })
+  @Prop({ required: true, trim: true, lowercase: true })
   email?: string;
 
-  // Table number (required)
-  @Prop({ required: true })
-  tableNumber: number;
+  @Prop()
+  tableNumber?: number;
 
   // Reservation date/time (required)
   @Prop({ required: true })
@@ -40,7 +39,7 @@ export class Reservation {
 
   // Number of guests (required)
   @Prop({ required: true })
-  numberOfGuests: number;
+  guests: number;
 
   // Reservation status (enum, default: PENDING)
   @Prop({
@@ -53,6 +52,9 @@ export class Reservation {
   // Confirmation code/token (required)
   @Prop({ required: true })
   confirmationCode: string;
+
+  @Prop()
+  specialRequests?: string;
 }
 
 export const ReservationSchema = SchemaFactory.createForClass(Reservation);

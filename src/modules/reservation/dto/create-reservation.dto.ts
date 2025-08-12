@@ -15,24 +15,30 @@ export class CreateReservationDto {
   @IsNotEmpty()
   name: string;
 
-  @IsString()
+  @IsOptional()
+  contactNumber?: string;
+
   @IsNotEmpty()
-  @Matches(/^\+?[1-9]\d{1,14}$/, { message: 'Invalid phone number format' })
-  contactNumber: string;
+  @IsEmail()
+  email: string;
 
   @IsOptional()
-  @IsEmail()
-  email?: string;
+  tableNumber?: number;
 
-  @IsNumber()
-  @Min(1)
-  tableNumber: number;
-
-  @IsDateString()
+  @IsNotEmpty()
   reservationDate: string;
+
+  @IsNotEmpty()
+  reservationTime: string;
 
   @IsNumber()
   @Min(1)
   @Max(15)
-  numberOfGuests: number;
+  guests: number;
+
+  @IsOptional()
+  specialRequests?: string;
+
+  @IsNotEmpty()
+  confirmationMethod: string;
 }

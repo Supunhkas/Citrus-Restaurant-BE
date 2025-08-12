@@ -17,17 +17,20 @@ import { ReservationStatus } from '../../schema/reservation/reservation.schema';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { Public } from 'src/common/decorators/public.decorator';
 
 @Controller('reservations')
 export class ReservationController {
   constructor(private readonly reservationService: ReservationService) {}
 
+  @Public()
   @Post('create')
   async createReservation(@Body() dto: CreateReservationDto) {
+    console.log(dto);
     return this.reservationService.createReservation(dto);
   }
 
-  // Confirm reservation by confirmation code
+  @Public()
   @Post('confirm')
   async confirmReservation(@Body() dto: ConfirmReservationDto) {
     return this.reservationService.confirmReservation(dto.confirmationCode);
