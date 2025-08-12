@@ -38,7 +38,7 @@ export class ReservationController {
 
   // List reservations; admins see all, users only their own
   @UseGuards(JwtAuthGuard)
-  @Get()
+  @Get('list')
   async getReservations(
     @Req() req,
     @Query('status') status?: string,

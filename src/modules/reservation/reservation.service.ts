@@ -52,6 +52,7 @@ export class ReservationService {
     const reservation = new this.reservationModel({
       ...dto,
       status: ReservationStatus.PENDING,
+      notes: '',
       confirmationCode,
     });
     await reservation.save();
@@ -78,7 +79,6 @@ export class ReservationService {
       confirmationCode,
     });
 
-
     if (!reservation) {
       throw new ConflictException('Invalid confirmation code');
     }
@@ -90,7 +90,9 @@ export class ReservationService {
       const now = Date.now();
       const oneHour = 60 * 60 * 1000;
       if (now - createdTime > oneHour) {
-        throw new ConflictException('Confirmation code expired. Please create a new reservation.');
+        throw new ConflictException(
+          'Confirmation code expired. Please create a new reservation.',
+        );
       }
     }
 
@@ -114,7 +116,7 @@ export class ReservationService {
             <li><b>Table Number:</b> ${reservation.tableNumber || 'N/A'}</li>
             <li><b>Confirmation Code:</b> ${reservation.confirmationCode}</li>
           </ul>
-          <p>Thank you for choosing Citrus Restaurant!</p>`
+          <p>Thank you for choosing Citrus Restaurant!</p>`,
       });
     }
 

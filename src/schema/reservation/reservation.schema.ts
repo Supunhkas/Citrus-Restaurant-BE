@@ -37,6 +37,9 @@ export class Reservation {
   @Prop({ required: true })
   reservationDate: Date;
 
+  @Prop({ required: true })
+  reservationTime: string;
+
   // Number of guests (required)
   @Prop({ required: true })
   guests: number;
@@ -55,6 +58,12 @@ export class Reservation {
 
   @Prop()
   specialRequests?: string;
+
+  @Prop()
+  confirmationMethod: 'email' | 'sms';
+
+  @Prop()
+  notes?: string;
 }
 
 export const ReservationSchema = SchemaFactory.createForClass(Reservation);
