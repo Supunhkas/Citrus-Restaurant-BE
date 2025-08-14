@@ -12,6 +12,7 @@ import { GlobalThrottlerGuard } from './common/guards/throttle.guard';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import configuration from './config/configuration';
 import { ReservationModule } from './modules/reservation/reservation.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -25,7 +26,7 @@ import { ReservationModule } from './modules/reservation/reservation.module';
       useFactory: (config: ConfigService) => ({
         throttlers: [
           {
-            ttl: config.get<number>('throttle.ttl') * 1000, // Convert to milliseconds
+            ttl: config.get<number>('throttle.ttl') * 1000,
             limit: config.get<number>('throttle.limit'),
           },
         ],
@@ -42,6 +43,7 @@ import { ReservationModule } from './modules/reservation/reservation.module';
     UsersModule,
     HealthModule,
     ReservationModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [

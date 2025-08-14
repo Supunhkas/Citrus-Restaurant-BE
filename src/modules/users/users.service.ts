@@ -150,4 +150,9 @@ export class UsersService {
   ): Promise<boolean> {
     return argon2.verify(hashedPassword, plainPassword);
   }
+
+  //!Dashboard Counters
+  async countUsers(): Promise<number> {
+    return this.userModel.countDocuments({ role: 'user' }).exec();
+  }
 }
