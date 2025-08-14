@@ -10,12 +10,17 @@ import { EmailService } from '../email/email.service';
 import { ReservationGateway } from './reservation.gateway';
 import { UsersService } from '../users/users.service';
 import { FCMService } from './fcm.service';
+import { ActionTypeReservationDto } from './dto/actionDto';
+import { CreateReservationDto } from './dto/create-reservation.dto';
+import { Counter, CounterDocument } from 'src/schema/counter/counter.schema';
 
 @Injectable()
 export class ReservationService {
   constructor(
     @InjectModel(Reservation.name)
     private reservationModel: Model<ReservationDocument>,
+    @InjectModel(Counter.name) private counterModel: Model<CounterDocument>,
+
     private emailService: EmailService,
     private reservationGateway: ReservationGateway,
     private usersService: UsersService,
@@ -46,11 +51,26 @@ export class ReservationService {
     }
   }
 
+  private async getNextSequence(name: string): Promise<number> {
+    const updated = await this.counterModel.findOneAndUpdate(
+      { name },
+      { $inc: { seq: 1 } },
+      { new: true, upsert: true },
+    );
+    return updated.seq;
+  }
+
   //! Create a new reservation
-  async createReservation(dto: any): Promise<Reservation> {
+  async createReservation(dto: CreateReservationDto): Promise<Reservation> {
     const confirmationCode = this.generateConfirmationCode();
+
+    // Generate reservationId
+    const seq = await this.getNextSequence('reservationId');
+    const reservationId = `RES-${seq.toString().padStart(6, '0')}`;
+
     const reservation = new this.reservationModel({
       ...dto,
+      reservationId,
       status: ReservationStatus.PENDING,
       notes: '',
       confirmationCode,
@@ -134,29 +154,42 @@ export class ReservationService {
   async getReservations(
     userId?: Types.ObjectId,
     status?: ReservationStatus,
-    startDate?: string,
-    endDate?: string,
-    tableNumber?: number,
-    name?: string,
+    date?: string,
+    search?: string,
   ): Promise<Reservation[]> {
     const filter: any = {};
     if (userId) filter.userId = userId;
     if (status) filter.status = status;
-    if (startDate || endDate) {
-      filter.reservationDate = {};
-      if (startDate) filter.reservationDate.$gte = new Date(startDate);
-      if (endDate) filter.reservationDate.$lte = new Date(endDate);
+    if (date) {
+      const start = new Date(date);
+      const end = new Date(date);
+      end.setUTCHours(23, 59, 59, 999);
+
+      filter.reservationDate = { $gte: start, $lte: end };
     }
-    if (tableNumber) filter.tableNumber = tableNumber;
-    if (name) filter.name = { $regex: name, $options: 'i' };
-    return this.reservationModel
+
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { reservationId: { $regex: search, $options: 'i' } },
+      ];
+    }
+    console.log(filter);
+    const res = await this.reservationModel
       .find(filter)
       .sort({ reservationDate: -1 })
       .exec();
+
+    console.log(res);
+    return res;
   }
 
   //! Approve a reservation
-  async approveReservation(reservationId: string): Promise<Reservation> {
+  async approveReservation(
+    reservationId: string,
+    dto: ActionTypeReservationDto,
+  ): Promise<Reservation> {
     const reservation = await this.reservationModel.findById(reservationId);
     if (!reservation) {
       throw new ConflictException('Reservation not found');
@@ -167,6 +200,7 @@ export class ReservationService {
       );
     }
     reservation.status = ReservationStatus.APPROVED;
+    reservation.notes = dto.notes;
     await reservation.save();
     // Notify all admins via FCM
     await this.notifyAdminsFCM(
@@ -190,7 +224,7 @@ export class ReservationService {
   //! Reject a reservation
   async rejectReservation(
     reservationId: string,
-    reason?: string,
+    dto: ActionTypeReservationDto,
   ): Promise<Reservation> {
     const reservation = await this.reservationModel.findById(reservationId);
     if (!reservation) {
@@ -202,6 +236,7 @@ export class ReservationService {
       );
     }
     reservation.status = ReservationStatus.REJECTED;
+    reservation.notes = dto.notes;
     await reservation.save();
     // Notify all admins via FCM
     await this.notifyAdminsFCM(
@@ -216,7 +251,7 @@ export class ReservationService {
         status: 'REJECTED',
         reservationDate: reservation.reservationDate.toISOString(),
         tableNumber: reservation.tableNumber,
-        reason: reason || 'Not specified',
+        reason: dto.notes || 'Not specified',
       });
     }
     this.reservationGateway.emitReservationRejected(reservation);

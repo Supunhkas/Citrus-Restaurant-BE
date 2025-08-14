@@ -10,6 +10,7 @@ import { FCMService } from './fcm.service';
 import { EmailModule } from '../email/email.module';
 import { UsersModule } from '../users/users.module';
 import { ReservationController } from './reservation.controller';
+import { Counter, CounterSchema } from 'src/schema/counter/counter.schema';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { ReservationController } from './reservation.controller';
     UsersModule,
     MongooseModule.forFeature([
       { name: Reservation.name, schema: ReservationSchema },
+      { name: Counter.name, schema: CounterSchema },
     ]),
   ],
   controllers: [ReservationController],

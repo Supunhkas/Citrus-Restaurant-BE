@@ -35,14 +35,12 @@ export class User {
   @Prop()
   passwordResetExpires?: Date;
 
-  // FCM device token for push notifications
   @Prop()
   deviceToken?: string;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
 
-// Indexes for better query performance
 UserSchema.index({ email: 1 });
 UserSchema.index({ emailVerificationToken: 1 });
 UserSchema.index({ passwordResetToken: 1 });

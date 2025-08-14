@@ -21,22 +21,16 @@ export class UsersService {
   async create(registerDto: RegisterDto): Promise<User> {
     const { email, password, name } = registerDto;
 
-    // Check if user already exists
     const existingUser = await this.findByEmail(email);
-
-    console.log(existingUser);
 
     if (existingUser) {
       throw new ConflictException('User with this email already exists');
     }
 
-    // Hash password
     const hashedPassword = await this.hashPassword(password);
 
-    // Generate email verification token
     const emailVerificationToken = randomBytes(32).toString('hex');
 
-    // Create user
     const user = new this.userModel({
       email,
       password: hashedPassword,

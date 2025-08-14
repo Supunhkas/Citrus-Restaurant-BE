@@ -18,6 +18,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Public } from 'src/common/decorators/public.decorator';
+import { ActionTypeReservationDto } from './dto/actionDto';
 
 @Controller('reservations')
 export class ReservationController {
@@ -36,26 +37,30 @@ export class ReservationController {
     return this.reservationService.confirmReservation(dto.confirmationCode);
   }
 
-  // List reservations; admins see all, users only their own
+  // Resend confirmation code
+  @Public()
+  @Post('resend-confirmation')
+  async resendConfirmation(@Body() dto: ResendConfirmationDto) {
+    return this.reservationService.resendConfirmation(
+      dto.contactNumber || dto.email,
+    );
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get('list')
   async getReservations(
     @Req() req,
     @Query('status') status?: string,
-    @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string,
-    @Query('tableNumber') tableNumber?: string,
-    @Query('name') name?: string,
+    @Query('date') date?: string,
+    @Query('search') search?: string,
   ) {
     const userId = req.user?.role === 'admin' ? undefined : req.user?._id;
     const statusEnum = status as ReservationStatus;
     return this.reservationService.getReservations(
       userId,
       statusEnum,
-      startDate,
-      endDate,
-      tableNumber ? Number(tableNumber) : undefined,
-      name,
+      date,
+      search,
     );
   }
 
@@ -63,23 +68,21 @@ export class ReservationController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Patch(':id/approve')
-  async approveReservation(@Param('id') id: string) {
-    return this.reservationService.approveReservation(id);
+  async approveReservation(
+    @Param('id') id: string,
+    @Body() dto: ActionTypeReservationDto,
+  ) {
+    return this.reservationService.approveReservation(id, dto);
   }
 
   // Reject reservation (admin only)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Patch(':id/reject')
-  async rejectReservation(@Param('id') id: string) {
-    return this.reservationService.rejectReservation(id);
-  }
-
-  // Resend confirmation code
-  @Post('resend-confirmation')
-  async resendConfirmation(@Body() dto: ResendConfirmationDto) {
-    return this.reservationService.resendConfirmation(
-      dto.contactNumber || dto.email,
-    );
+  async rejectReservation(
+    @Param('id') id: string,
+    @Body() dto: ActionTypeReservationDto,
+  ) {
+    return this.reservationService.rejectReservation(id, dto);
   }
 }
