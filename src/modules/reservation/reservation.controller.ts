@@ -46,7 +46,8 @@ export class ReservationController {
     );
   }
 
-  @UseGuards(JwtAuthGuard)
+  // @UseGuards(JwtAuthGuard)
+  @Public()
   @Get('list')
   async getReservations(
     @Req() req,
@@ -55,6 +56,7 @@ export class ReservationController {
     @Query('search') search?: string,
   ) {
     const userId = req.user?.role === 'admin' ? undefined : req.user?._id;
+    console.log('User ID:', userId);
     const statusEnum = status as ReservationStatus;
     return this.reservationService.getReservations(
       userId,
