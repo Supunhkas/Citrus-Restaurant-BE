@@ -8,6 +8,7 @@ import {
   Query,
   UseGuards,
   Req,
+  Put,
 } from '@nestjs/common';
 import { ReservationService } from './reservation.service';
 import { CreateReservationDto } from './dto/create-reservation.dto';
@@ -17,28 +18,22 @@ import { ReservationStatus } from '../../schema/reservation/reservation.schema';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { Public } from 'src/common/decorators/public.decorator';
 import { ActionTypeReservationDto } from './dto/actionDto';
 
 @Controller('reservations')
 export class ReservationController {
   constructor(private readonly reservationService: ReservationService) {}
 
-  @Public()
   @Post('create')
   async createReservation(@Body() dto: CreateReservationDto) {
-    console.log(dto);
     return this.reservationService.createReservation(dto);
   }
 
-  @Public()
   @Post('confirm')
   async confirmReservation(@Body() dto: ConfirmReservationDto) {
     return this.reservationService.confirmReservation(dto.confirmationCode);
   }
 
-  // Resend confirmation code
-  @Public()
   @Post('resend-confirmation')
   async resendConfirmation(@Body() dto: ResendConfirmationDto) {
     return this.reservationService.resendConfirmation(
@@ -46,8 +41,7 @@ export class ReservationController {
     );
   }
 
-  // @UseGuards(JwtAuthGuard)
-  @Public()
+  @UseGuards(JwtAuthGuard)
   @Get('list')
   async getReservations(
     @Req() req,
@@ -56,7 +50,7 @@ export class ReservationController {
     @Query('search') search?: string,
   ) {
     const userId = req.user?.role === 'admin' ? undefined : req.user?._id;
-    console.log('User ID:', userId);
+
     const statusEnum = status as ReservationStatus;
     return this.reservationService.getReservations(
       userId,
@@ -66,21 +60,19 @@ export class ReservationController {
     );
   }
 
-  // Approve reservation (admin only)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
-  @Patch(':id/approve')
+  @Patch(':id')
   async approveReservation(
     @Param('id') id: string,
-    @Body() dto: ActionTypeReservationDto,
+    @Body('status') status: 'approved' | 'rejected',
   ) {
-    return this.reservationService.approveReservation(id, dto);
+    return this.reservationService.approveReservation(id, status);
   }
 
-  // Reject reservation (admin only)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
-  @Patch(':id/reject')
+  @Put(':id/reject')
   async rejectReservation(
     @Param('id') id: string,
     @Body() dto: ActionTypeReservationDto,

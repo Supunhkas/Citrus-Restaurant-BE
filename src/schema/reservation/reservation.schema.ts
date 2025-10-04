@@ -57,6 +57,9 @@ export class Reservation {
 
   @Prop()
   notes?: string;
+
+  @Prop()
+  rejectedReason?: string;
 }
 
 export const ReservationSchema = SchemaFactory.createForClass(Reservation);

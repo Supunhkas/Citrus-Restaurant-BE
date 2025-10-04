@@ -18,13 +18,14 @@ import { Counter, CounterDocument } from 'src/schema/counter/counter.schema';
 export class ReservationService {
   constructor(
     @InjectModel(Reservation.name)
-    private reservationModel: Model<ReservationDocument>,
-    @InjectModel(Counter.name) private counterModel: Model<CounterDocument>,
+    private readonly reservationModel: Model<ReservationDocument>,
+    @InjectModel(Counter.name)
+    private readonly counterModel: Model<CounterDocument>,
 
-    private emailService: EmailService,
-    private reservationGateway: ReservationGateway,
-    private usersService: UsersService,
-    private fcmService: FCMService,
+    private readonly emailService: EmailService,
+    private readonly reservationGateway: ReservationGateway,
+    private readonly usersService: UsersService,
+    private readonly fcmService: FCMService,
   ) {}
 
   private generateConfirmationCode(): string {
@@ -175,20 +176,19 @@ export class ReservationService {
         { reservationId: { $regex: search, $options: 'i' } },
       ];
     }
-    console.log(filter);
+
     const res = await this.reservationModel
       .find(filter)
       .sort({ reservationDate: -1 })
       .exec();
 
-    console.log(res);
     return res;
   }
 
   //! Approve a reservation
   async approveReservation(
     reservationId: string,
-    dto: ActionTypeReservationDto,
+    status: 'approved' | 'rejected',
   ): Promise<Reservation> {
     const reservation = await this.reservationModel.findById(reservationId);
     if (!reservation) {
@@ -200,7 +200,7 @@ export class ReservationService {
       );
     }
     reservation.status = ReservationStatus.APPROVED;
-    reservation.notes = dto.notes;
+
     await reservation.save();
     // Notify all admins via FCM
     await this.notifyAdminsFCM(
@@ -230,13 +230,16 @@ export class ReservationService {
     if (!reservation) {
       throw new ConflictException('Reservation not found');
     }
+    console.log('Current reservation status:', reservation.status);
     if (reservation.status !== ReservationStatus.CONFIRMED) {
       throw new ConflictException(
         'Only confirmed reservations can be rejected',
       );
     }
+    console.log('Updating reservation status to REJECTED');
     reservation.status = ReservationStatus.REJECTED;
-    reservation.notes = dto.notes;
+    reservation.rejectedReason = dto.reason;
+
     await reservation.save();
     // Notify all admins via FCM
     await this.notifyAdminsFCM(
@@ -251,7 +254,7 @@ export class ReservationService {
         status: 'REJECTED',
         reservationDate: reservation.reservationDate.toISOString(),
         tableNumber: reservation.tableNumber,
-        reason: dto.notes || 'Not specified',
+        reason: dto.reason,
       });
     }
     this.reservationGateway.emitReservationRejected(reservation);
