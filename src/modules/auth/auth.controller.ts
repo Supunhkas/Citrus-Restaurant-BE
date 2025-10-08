@@ -44,7 +44,6 @@ export class AuthController {
   @UseGuards(AuthThrottleGuard)
   @HttpCode(HttpStatus.OK)
   async adminLogin(@Body() loginDto: LoginDto): Promise<AuthResponseDto> {
-    console.log(loginDto);
     return this.authService.adminLogin(loginDto);
   }
 

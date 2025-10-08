@@ -10,7 +10,6 @@ import { EmailModule } from '../email/email.module';
 import { UsersModule } from '../users/users.module';
 import { ReservationController } from './reservation.controller';
 import { Counter, CounterSchema } from 'src/schema/counter/counter.schema';
-import { FirebaseModule } from '../firebase/firebase.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
@@ -21,7 +20,6 @@ import { NotificationsModule } from '../notifications/notifications.module';
       { name: Reservation.name, schema: ReservationSchema },
       { name: Counter.name, schema: CounterSchema },
     ]),
-    FirebaseModule,
     NotificationsModule,
   ],
   controllers: [ReservationController],

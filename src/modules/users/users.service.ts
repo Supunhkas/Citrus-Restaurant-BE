@@ -167,7 +167,6 @@ export class UsersService {
         },
         { new: true },
       );
-      console.log(`Device token updated for user: ${userId}`);
     } catch (error) {
       console.error(
         `Failed to update device token for user ${userId}`,
@@ -186,7 +185,7 @@ export class UsersService {
         },
         { new: true },
       );
-      console.log(`Fcm token updated for user: ${userId}`);
+      `Fcm token updated for user: ${userId}`;
     } catch (error) {
       console.error(
         `Failed to update Fcm token for user ${userId}`,
@@ -206,7 +205,7 @@ export class UsersService {
         },
         { new: true },
       );
-      console.log(`Device token removed for user: ${userId}`);
+      `Device token removed for user: ${userId}`;
     } catch (error) {
       console.error(
         `Failed to remove device token for user ${userId}`,

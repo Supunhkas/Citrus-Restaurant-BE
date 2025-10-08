@@ -12,7 +12,6 @@ import { UsersService } from '../users/users.service';
 import { ActionTypeReservationDto } from './dto/actionDto';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { Counter, CounterDocument } from 'src/schema/counter/counter.schema';
-import { FirebaseService } from '../firebase/firebase.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
@@ -27,7 +26,6 @@ export class ReservationService {
     private readonly emailService: EmailService,
     private readonly reservationGateway: ReservationGateway,
     private readonly usersService: UsersService,
-    private readonly fcmService: FirebaseService,
     private readonly expoService: NotificationsService,
   ) {}
 
@@ -35,45 +33,7 @@ export class ReservationService {
     return Math.random().toString(36).substring(2, 10).toUpperCase();
   }
 
-  // Helper: Send FCM push notification to all admins
-  private async notifyAdminsFCM(
-    title: string,
-    body: string,
-    data?: Record<string, string>,
-  ) {
-    try {
-      const admins = await this.usersService['userModel']
-        .find({
-          role: 'admin',
-          deviceToken: { $exists: true, $ne: null },
-        })
-        .select('deviceToken')
-        .lean();
-
-      console.log('Admins found for FCM notification:', admins);
-
-      if (!admins || admins.length === 0) {
-        console.warn('No admin device tokens found for FCM notification');
-        return;
-      }
-
-      const deviceTokens = admins
-        .map((admin) => admin.deviceToken)
-        .filter((token) => token && token.length > 0);
-
-      console.log('Admin device tokens for FCM notification:', deviceTokens);
-
-      if (deviceTokens.length === 0) {
-        console.warn('No valid admin device tokens found');
-        return;
-      }
-
-      await this.fcmService.sendMulticast(deviceTokens, title, body, data);
-    } catch (error) {
-      console.error('Error notifying admins via FCM', error);
-    }
-  }
-
+  // Helper: Send Expo push notification to all admins
   private async notifyAdminsExpo(
     title: string,
     body: string,
@@ -132,17 +92,14 @@ export class ReservationService {
         html: `<p>Your confirmation code is: <b>${confirmationCode}</b></p>`,
       });
     }
-    // Notify all admins via FCM
-    // await this.notifyAdminsFCM(
-    //   'New Reservation',
-    //   `Reservation for table ${reservation.tableNumber} on ${new Date(reservation.reservationDate).toLocaleString()}`,
-    //   { reservationId: reservation._id.toString() },
-    // );
 
     await this.notifyAdminsExpo(
       'New Reservation',
-      `Reservation for table ${reservation.tableNumber} on ${new Date(reservation.reservationDate).toLocaleString()}`,
-      { reservationId: reservation._id.toString() },
+      `Reservation on ${new Date(reservation.reservationDate).toLocaleDateString()} ${reservation.reservationTime}`,
+      {
+        screen: 'reservation',
+        _id: reservation._id.toString(),
+      },
     );
     this.reservationGateway.emitNewReservation(reservation);
     return reservation;
@@ -151,6 +108,7 @@ export class ReservationService {
   //! Confirm a reservation
   async confirmReservation(confirmationCode: string): Promise<Reservation> {
     const reservation = await this.reservationModel.findOne({
+      status: ReservationStatus.PENDING,
       confirmationCode,
     });
 
@@ -176,6 +134,7 @@ export class ReservationService {
     }
 
     reservation.status = ReservationStatus.CONFIRMED;
+    reservation.confirmationCode = null;
     await reservation.save();
 
     // Send confirmation email to user with reservation details
@@ -188,20 +147,18 @@ export class ReservationService {
           <p>Your reservation has been successfully confirmed.</p>
           <ul>
             <li><b>Date:</b> ${reservation.reservationDate ? new Date(reservation.reservationDate).toLocaleString() : 'N/A'}</li>
-            <li><b>Table Number:</b> ${reservation.tableNumber || 'N/A'}</li>
-            <li><b>Confirmation Code:</b> ${reservation.confirmationCode}</li>
+            <li><b>Reservation Time:</b> ${reservation.reservationTime || 'N/A'}</li>
           </ul>
           <p>Thank you for choosing Citrus Restaurant!</p>`,
       });
     }
 
-    // Notify all admins via FCM
-    await this.notifyAdminsFCM(
+    // Notify all admins
+    await this.notifyAdminsExpo(
       'Reservation Confirmed',
-      `Reservation for table ${reservation.tableNumber} on ${reservation.reservationDate ? new Date(reservation.reservationDate).toLocaleString() : ''} has been confirmed.`,
-      { reservationId: reservation._id.toString() },
+      `${reservation.name} on ${reservation.reservationDate ? new Date(reservation.reservationDate).toLocaleDateString() : ''} has been confirmed.`,
+      { screen: 'reservation', _id: reservation._id.toString() },
     );
-
     return reservation;
   }
 
@@ -253,13 +210,13 @@ export class ReservationService {
     reservation.status = ReservationStatus.APPROVED;
 
     await reservation.save();
-    // Notify all admins via FCM
-    await this.notifyAdminsFCM(
+
+    await this.notifyAdminsExpo(
       'Reservation Approved',
-      `Reservation for table ${reservation.tableNumber} has been approved.`,
-      { reservationId: reservation._id.toString() },
+      `${reservation.name} on ${reservation.reservationDate ? new Date(reservation.reservationDate).toLocaleDateString() : ''} has been approved.`,
+      { screen: 'reservation', _id: reservation._id.toString() },
     );
-    // Send email to guest (if email exists)
+
     if (reservation.email) {
       await this.emailService.sendReservationUpdate(reservation.email, {
         name: reservation.name,
@@ -281,22 +238,22 @@ export class ReservationService {
     if (!reservation) {
       throw new ConflictException('Reservation not found');
     }
-    console.log('Current reservation status:', reservation.status);
+
     if (reservation.status !== ReservationStatus.CONFIRMED) {
       throw new ConflictException(
         'Only confirmed reservations can be rejected',
       );
     }
-    console.log('Updating reservation status to REJECTED');
+
     reservation.status = ReservationStatus.REJECTED;
     reservation.rejectedReason = dto.reason;
 
     await reservation.save();
-    // Notify all admins via FCM
-    await this.notifyAdminsFCM(
+    // Notify all admins
+    await this.notifyAdminsExpo(
       'Reservation Rejected',
-      `Reservation for table ${reservation.tableNumber} has been rejected.`,
-      { reservationId: reservation._id.toString() },
+      `${reservation.name} on ${reservation.reservationDate ? new Date(reservation.reservationDate).toLocaleDateString() : ''} has been rejected.`,
+      { screen: 'reservation', _id: reservation._id.toString() },
     );
     // Send email to guest (if email exists)
     if (reservation.email) {

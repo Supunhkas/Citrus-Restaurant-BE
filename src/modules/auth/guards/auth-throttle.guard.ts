@@ -10,7 +10,7 @@ export class AuthThrottleGuard extends ThrottlerGuard {
 
   protected getThrottleOptions(context: any) {
     // Stricter limits for auth endpoints
-    console.log(context);
+
     return {
       ttl: 60 * 1000, // 1 minute
       limit: 5, // 5 attempts per minute

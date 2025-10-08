@@ -1,50 +1,3 @@
-// import { Injectable, Logger } from '@nestjs/common';
-// import { Expo, ExpoPushMessage, ExpoPushTicket } from 'expo-server-sdk';
-
-// @Injectable()
-// export class NotificationsService {
-//   private readonly expo = new Expo();
-//   private readonly logger = new Logger(NotificationsService.name);
-
-//   async sendPushNotification(
-//     pushToken: string,
-//     title: string,
-//     body: string,
-//     data?: any,
-//   ) {
-//     // Validate token
-//     if (!Expo.isExpoPushToken(pushToken)) {
-//       this.logger.warn(`Invalid Expo push token: ${pushToken}`);
-//       return;
-//     }
-
-//     const messages: ExpoPushMessage[] = [
-//       {
-//         to: pushToken,
-//         sound: 'default',
-//         title,
-//         body,
-//         data,
-//       },
-//     ];
-
-//     const chunks = this.expo.chunkPushNotifications(messages);
-//     const tickets: ExpoPushTicket[] = [];
-
-//     for (const chunk of chunks) {
-//       try {
-//         const ticketChunk = await this.expo.sendPushNotificationsAsync(chunk);
-//         tickets.push(...ticketChunk);
-//         this.logger.log(`Push sent: ${JSON.stringify(ticketChunk)}`);
-//       } catch (error) {
-//         this.logger.error('Error sending push notification', error);
-//       }
-//     }
-
-//     return tickets;
-//   }
-// }
-
 import { Injectable, Logger } from '@nestjs/common';
 import { Expo, ExpoPushMessage } from 'expo-server-sdk';
 
@@ -70,6 +23,7 @@ export class NotificationsService {
       title,
       body,
       data,
+      channelId: 'admin-alerts',
     };
 
     try {

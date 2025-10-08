@@ -45,12 +45,11 @@ export class DashboardService {
 
   constructor(
     @InjectModel(Reservation.name)
-    private reservationModel: Model<ReservationDocument>,
-    private userService: UsersService,
+    readonly reservationModel: Model<ReservationDocument>,
+    private readonly userService: UsersService,
   ) {}
 
   async getKpiData(): Promise<KpiData> {
-    console.log('Fetching KPI data');
     try {
       this.logger.log('Fetching KPI data');
 

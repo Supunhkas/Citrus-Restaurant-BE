@@ -35,7 +35,6 @@ export class FirebaseService implements OnModuleInit {
           }),
         });
         this.initialized = true;
-        console.log('Firebase Admin initialized for FCM');
       } catch (error) {
         console.error('Failed to initialize Firebase Admin', error);
         throw error;
@@ -86,7 +85,7 @@ export class FirebaseService implements OnModuleInit {
       };
 
       const response = await admin.messaging().send(message);
-      console.log(`FCM notification sent successfully: ${response}`);
+
       return response;
     } catch (error) {
       // Handle specific FCM errors
@@ -148,12 +147,7 @@ export class FirebaseService implements OnModuleInit {
         },
       };
 
-      console.log('Multicast message:', message);
-
       const response = await admin.messaging().sendEachForMulticast(message);
-      console.log(
-        `Multicast sent. Success: ${response.successCount}, Failure: ${response.failureCount}`,
-      );
 
       // Log failed tokens for debugging
       if (response.failureCount > 0) {
