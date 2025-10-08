@@ -14,8 +14,8 @@ async function bootstrap() {
       contentSecurityPolicy: configService.get(
         'security.helmet.contentSecurityPolicy',
       ),
-      crossOriginEmbedderPolicy: false, // Disable for development, enable in production
-      crossOriginResourcePolicy: { policy: 'cross-origin' }, // Allow cross-origin resources
+      crossOriginEmbedderPolicy: false,
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
     }),
   );
 
@@ -38,7 +38,7 @@ async function bootstrap() {
   // Request size limits
   app.use((req, res, next) => {
     const contentLength = parseInt(req.headers['content-length'] || '0', 10);
-    const maxSize = 10 * 1024 * 1024; // 10MB limit
+    const maxSize = 10 * 1024 * 1024;
 
     if (contentLength > maxSize) {
       return res.status(413).json({

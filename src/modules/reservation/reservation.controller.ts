@@ -19,21 +19,25 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { ActionTypeReservationDto } from './dto/actionDto';
+import { Public } from 'src/common/decorators/public.decorator';
 
 @Controller('reservations')
 export class ReservationController {
   constructor(private readonly reservationService: ReservationService) {}
 
+  @Public()
   @Post('create')
   async createReservation(@Body() dto: CreateReservationDto) {
     return this.reservationService.createReservation(dto);
   }
 
+  @Public()
   @Post('confirm')
   async confirmReservation(@Body() dto: ConfirmReservationDto) {
     return this.reservationService.confirmReservation(dto.confirmationCode);
   }
 
+  @Public()
   @Post('resend-confirmation')
   async resendConfirmation(@Body() dto: ResendConfirmationDto) {
     return this.reservationService.resendConfirmation(
@@ -63,11 +67,8 @@ export class ReservationController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Patch(':id')
-  async approveReservation(
-    @Param('id') id: string,
-    @Body('status') status: 'approved' | 'rejected',
-  ) {
-    return this.reservationService.approveReservation(id, status);
+  async approveReservation(@Param('id') id: string) {
+    return this.reservationService.approveReservation(id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

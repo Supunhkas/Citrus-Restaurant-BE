@@ -12,10 +12,10 @@ export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
   constructor(
-    private usersService: UsersService,
-    private jwtService: JwtService,
-    private configService: ConfigService,
-    private emailService: EmailService,
+    private readonly usersService: UsersService,
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+    private readonly emailService: EmailService,
   ) {}
 
   async register(registerDto: RegisterDto): Promise<AuthResponseDto> {
@@ -43,11 +43,11 @@ export class AuthService {
   }
 
   async adminLogin(loginDto: LoginDto): Promise<AuthResponseDto> {
-    const { email, password } = loginDto;
+    const { email, password, deviceToken, fcmToken } = loginDto;
 
     const user = await this.usersService.findByEmail(email);
-    console.log(user);
-    if (!user || !user.isActive) {
+
+    if (!user?.isActive) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -59,13 +59,23 @@ export class AuthService {
       password,
       user.password,
     );
-    console.log(isPasswordValid);
+
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
     // Update last login
     await this.usersService.updateLastLogin((user as any)._id);
+
+    if (deviceToken) {
+      await this.usersService.updateDeviceToken((user as any)._id, deviceToken);
+      this.logger.log(`Device token saved for user: ${email}`);
+    }
+
+    if (fcmToken) {
+      await this.usersService.updateFcmToken((user as any)._id, fcmToken);
+      this.logger.log(`FCM token saved for user: ${email}`);
+    }
 
     const tokens = await this.generateTokens(user);
     console.log('log success');
@@ -79,14 +89,13 @@ export class AuthService {
       refreshToken: tokens.refreshToken,
     });
 
-    console.log(response);
     return response;
   }
   async login(loginDto: LoginDto): Promise<AuthResponseDto> {
     const { email, password } = loginDto;
 
     const user = await this.usersService.findByEmail(email);
-    if (!user || !user.isActive) {
+    if (!user?.isActive) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -121,7 +130,7 @@ export class AuthService {
       });
 
       const user = await this.usersService.findById(payload.sub);
-      if (!user || !user.isActive) {
+      if (!user?.isActive) {
         throw new UnauthorizedException('Invalid refresh token');
       }
 
@@ -137,6 +146,7 @@ export class AuthService {
         refreshToken: tokens.refreshToken,
       });
     } catch (error) {
+      this.logger.error('Error verifying refresh token', error);
       throw new UnauthorizedException('Invalid refresh token');
     }
   }

@@ -1,4 +1,4 @@
-import { Injectable, ConflictException } from '@nestjs/common';
+import { Injectable, ConflictException, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import {
@@ -9,13 +9,15 @@ import {
 import { EmailService } from '../email/email.service';
 import { ReservationGateway } from './reservation.gateway';
 import { UsersService } from '../users/users.service';
-import { FCMService } from './fcm.service';
 import { ActionTypeReservationDto } from './dto/actionDto';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { Counter, CounterDocument } from 'src/schema/counter/counter.schema';
+import { FirebaseService } from '../firebase/firebase.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class ReservationService {
+  private readonly logger = new Logger(ReservationService.name);
   constructor(
     @InjectModel(Reservation.name)
     private readonly reservationModel: Model<ReservationDocument>,
@@ -25,7 +27,8 @@ export class ReservationService {
     private readonly emailService: EmailService,
     private readonly reservationGateway: ReservationGateway,
     private readonly usersService: UsersService,
-    private readonly fcmService: FCMService,
+    private readonly fcmService: FirebaseService,
+    private readonly expoService: NotificationsService,
   ) {}
 
   private generateConfirmationCode(): string {
@@ -38,17 +41,62 @@ export class ReservationService {
     body: string,
     data?: Record<string, string>,
   ) {
-    const admins = await this.usersService['userModel'].find({
-      role: 'admin',
-      deviceToken: { $exists: true, $ne: null },
-    });
-    for (const admin of admins) {
-      await this.fcmService.sendNotification(
-        admin.deviceToken,
-        title,
-        body,
-        data,
-      );
+    try {
+      const admins = await this.usersService['userModel']
+        .find({
+          role: 'admin',
+          deviceToken: { $exists: true, $ne: null },
+        })
+        .select('deviceToken')
+        .lean();
+
+      console.log('Admins found for FCM notification:', admins);
+
+      if (!admins || admins.length === 0) {
+        console.warn('No admin device tokens found for FCM notification');
+        return;
+      }
+
+      const deviceTokens = admins
+        .map((admin) => admin.deviceToken)
+        .filter((token) => token && token.length > 0);
+
+      console.log('Admin device tokens for FCM notification:', deviceTokens);
+
+      if (deviceTokens.length === 0) {
+        console.warn('No valid admin device tokens found');
+        return;
+      }
+
+      await this.fcmService.sendMulticast(deviceTokens, title, body, data);
+    } catch (error) {
+      console.error('Error notifying admins via FCM', error);
+    }
+  }
+
+  private async notifyAdminsExpo(
+    title: string,
+    body: string,
+    data?: Record<string, string>,
+  ) {
+    try {
+      const admins = await this.usersService['userModel']
+        .find({
+          role: 'admin',
+          deviceToken: { $exists: true, $ne: null },
+        })
+        .select('deviceToken')
+        .lean();
+
+      if (!admins || admins.length === 0) {
+        this.logger.warn('No admin Expo push tokens found');
+        return;
+      }
+
+      const tokens = admins.map((a) => a.deviceToken).filter(Boolean);
+      await this.expoService.sendMulticast(tokens, title, body, data);
+    } catch (error) {
+      this.logger.error('Error notifying admins via Expo', error);
     }
   }
 
@@ -85,7 +133,13 @@ export class ReservationService {
       });
     }
     // Notify all admins via FCM
-    await this.notifyAdminsFCM(
+    // await this.notifyAdminsFCM(
+    //   'New Reservation',
+    //   `Reservation for table ${reservation.tableNumber} on ${new Date(reservation.reservationDate).toLocaleString()}`,
+    //   { reservationId: reservation._id.toString() },
+    // );
+
+    await this.notifyAdminsExpo(
       'New Reservation',
       `Reservation for table ${reservation.tableNumber} on ${new Date(reservation.reservationDate).toLocaleString()}`,
       { reservationId: reservation._id.toString() },
@@ -186,10 +240,7 @@ export class ReservationService {
   }
 
   //! Approve a reservation
-  async approveReservation(
-    reservationId: string,
-    status: 'approved' | 'rejected',
-  ): Promise<Reservation> {
+  async approveReservation(reservationId: string): Promise<Reservation> {
     const reservation = await this.reservationModel.findById(reservationId);
     if (!reservation) {
       throw new ConflictException('Reservation not found');

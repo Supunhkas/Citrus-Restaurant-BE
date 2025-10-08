@@ -35,8 +35,17 @@ export class User {
   @Prop()
   passwordResetExpires?: Date;
 
-  @Prop()
+  @Prop({ type: String, default: null })
   deviceToken?: string;
+
+  @Prop({ type: Date, default: null })
+  deviceTokenUpdatedAt?: Date;
+
+  @Prop({ type: String, default: null })
+  fcmToken?: string;
+
+  @Prop({ type: Date, default: null })
+  fcmTokenUpdatedAt?: Date;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

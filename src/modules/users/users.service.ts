@@ -2,6 +2,7 @@ import {
   Injectable,
   ConflictException,
   NotFoundException,
+  Logger,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -14,8 +15,8 @@ import { randomBytes } from 'crypto';
 @Injectable()
 export class UsersService {
   constructor(
-    @InjectModel(User.name) private userModel: Model<UserDocument>,
-    private configService: ConfigService,
+    @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
+    private readonly configService: ConfigService,
   ) {}
 
   async create(registerDto: RegisterDto): Promise<User> {
@@ -154,5 +155,68 @@ export class UsersService {
   //!Dashboard Counters
   async countUsers(): Promise<number> {
     return this.userModel.countDocuments({ role: 'user' }).exec();
+  }
+
+  async updateDeviceToken(userId: string, deviceToken: string): Promise<void> {
+    try {
+      await this.userModel.findByIdAndUpdate(
+        userId,
+        {
+          deviceToken,
+          deviceTokenUpdatedAt: new Date(),
+        },
+        { new: true },
+      );
+      console.log(`Device token updated for user: ${userId}`);
+    } catch (error) {
+      console.error(
+        `Failed to update device token for user ${userId}`,
+        error.stack,
+      );
+      // Don't throw - token update failure shouldn't break login
+    }
+  }
+  async updateFcmToken(userId: string, fcm: string): Promise<void> {
+    try {
+      await this.userModel.findByIdAndUpdate(
+        userId,
+        {
+          fcmToken: fcm,
+          fcmTokenUpdatedAt: new Date(),
+        },
+        { new: true },
+      );
+      console.log(`Fcm token updated for user: ${userId}`);
+    } catch (error) {
+      console.error(
+        `Failed to update Fcm token for user ${userId}`,
+        error.stack,
+      );
+      // Don't throw - token update failure shouldn't break login
+    }
+  }
+
+  async removeDeviceToken(userId: string): Promise<void> {
+    try {
+      await this.userModel.findByIdAndUpdate(
+        userId,
+        {
+          deviceToken: null,
+          deviceTokenUpdatedAt: null,
+        },
+        { new: true },
+      );
+      console.log(`Device token removed for user: ${userId}`);
+    } catch (error) {
+      console.error(
+        `Failed to remove device token for user ${userId}`,
+        error.stack,
+      );
+    }
+  }
+
+  // Optional: Find all users by device token (useful for cleanup)
+  async findByDeviceToken(deviceToken: string): Promise<User[]> {
+    return this.userModel.find({ deviceToken }).exec();
   }
 }
