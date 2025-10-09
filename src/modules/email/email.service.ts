@@ -121,7 +121,7 @@ export class EmailService {
     },
   ): Promise<boolean> {
     const appConfig = this.configService.get('app');
-    const { name, status, reservationDate, tableNumber, reason } = update;
+    const { name, status, reservationDate, reason } = update;
     const subject = `Reservation Update - ${appConfig.name}`;
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -131,7 +131,7 @@ export class EmailService {
         <div style="padding: 20px;">
           <h2 style="color: #333;">Reservation Update</h2>
           <p>Dear ${name},</p>
-          <p>Your reservation for table <b>${tableNumber}</b> on <b>${new Date(reservationDate).toLocaleString()}</b> has been <b>${status}</b>.</p>
+          <p>Your reservation on <b>${new Date(reservationDate).toLocaleString()}</b> has been <b>${status}</b>.</p>
           ${reason ? `<p>Reason: ${reason}</p>` : ''}
           <p>If you have any questions, please contact us.</p>
         </div>
@@ -140,7 +140,7 @@ export class EmailService {
         </div>
       </div>
     `;
-    const text = `Dear ${name},\nYour reservation for table ${tableNumber} on ${new Date(reservationDate).toLocaleString()} has been ${status}.${reason ? '\nReason: ' + reason : ''}\nIf you have any questions, please contact us.`;
+    const text = `Dear ${name},\nYour reservation on ${new Date(reservationDate).toLocaleDateString()} has been ${status}.${reason ? '\nReason: ' + reason : ''}\nIf you have any questions, please contact us.`;
     return this.sendEmail({
       to: email,
       subject,

@@ -134,7 +134,7 @@ export class ReservationService {
     }
 
     reservation.status = ReservationStatus.CONFIRMED;
-    reservation.confirmationCode = null;
+    // reservation.confirmationCode = null;
     await reservation.save();
 
     // Send confirmation email to user with reservation details
@@ -146,7 +146,7 @@ export class ReservationService {
           <p>Dear ${reservation.name || 'Guest'},</p>
           <p>Your reservation has been successfully confirmed.</p>
           <ul>
-            <li><b>Date:</b> ${reservation.reservationDate ? new Date(reservation.reservationDate).toLocaleString() : 'N/A'}</li>
+            <li><b>Date:</b> ${reservation.reservationDate ? new Date(reservation.reservationDate).toLocaleDateString() : 'N/A'}</li>
             <li><b>Reservation Time:</b> ${reservation.reservationTime || 'N/A'}</li>
           </ul>
           <p>Thank you for choosing Citrus Restaurant!</p>`,
@@ -246,13 +246,13 @@ export class ReservationService {
     }
 
     reservation.status = ReservationStatus.REJECTED;
-    reservation.rejectedReason = dto.reason;
+    reservation.notes = dto.reason;
 
     await reservation.save();
     // Notify all admins
     await this.notifyAdminsExpo(
       'Reservation Rejected',
-      `${reservation.name} on ${reservation.reservationDate ? new Date(reservation.reservationDate).toLocaleDateString() : ''} has been rejected.`,
+      `Customer ${reservation.name} Reservation on ${reservation.reservationDate ? new Date(reservation.reservationDate).toLocaleDateString() : ''} has been rejected.`,
       { screen: 'reservation', _id: reservation._id.toString() },
     );
     // Send email to guest (if email exists)
@@ -260,7 +260,7 @@ export class ReservationService {
       await this.emailService.sendReservationUpdate(reservation.email, {
         name: reservation.name,
         status: 'REJECTED',
-        reservationDate: reservation.reservationDate.toISOString(),
+        reservationDate: reservation.reservationDate.toLocaleDateString(),
         tableNumber: reservation.tableNumber,
         reason: dto.reason,
       });

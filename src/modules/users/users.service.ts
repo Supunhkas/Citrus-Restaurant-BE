@@ -3,6 +3,7 @@ import {
   ConflictException,
   NotFoundException,
   Logger,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -46,8 +47,14 @@ export class UsersService {
     return this.userModel.findOne({ email: email.toLowerCase() }).exec();
   }
 
-  async findById(id: string): Promise<User | null> {
-    return this.userModel.findById(id).exec();
+  async findById(id: any): Promise<User | null> {
+    const user = await this.userModel.findById(id).exec();
+
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    return user;
   }
 
   async updateLastLogin(userId: string): Promise<void> {
