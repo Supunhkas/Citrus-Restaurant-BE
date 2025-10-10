@@ -7,7 +7,6 @@ import {
   ReservationStatus,
 } from '../../schema/reservation/reservation.schema';
 import { EmailService } from '../email/email.service';
-import { ReservationGateway } from './reservation.gateway';
 import { UsersService } from '../users/users.service';
 import { ActionTypeReservationDto } from './dto/actionDto';
 import { CreateReservationDto } from './dto/create-reservation.dto';
@@ -24,7 +23,7 @@ export class ReservationService {
     private readonly counterModel: Model<CounterDocument>,
 
     private readonly emailService: EmailService,
-    private readonly reservationGateway: ReservationGateway,
+
     private readonly usersService: UsersService,
     private readonly expoService: NotificationsService,
   ) {}
@@ -101,7 +100,7 @@ export class ReservationService {
         _id: reservation._id.toString(),
       },
     );
-    this.reservationGateway.emitNewReservation(reservation);
+
     return reservation;
   }
 
@@ -225,7 +224,7 @@ export class ReservationService {
         tableNumber: reservation.tableNumber,
       });
     }
-    this.reservationGateway.emitReservationApproved(reservation);
+
     return reservation;
   }
 
@@ -265,7 +264,7 @@ export class ReservationService {
         reason: dto.reason,
       });
     }
-    this.reservationGateway.emitReservationRejected(reservation);
+
     return reservation;
   }
 

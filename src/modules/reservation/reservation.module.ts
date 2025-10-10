@@ -5,7 +5,6 @@ import {
   ReservationSchema,
 } from '../../schema/reservation/reservation.schema';
 import { ReservationService } from './reservation.service';
-import { ReservationGateway } from './reservation.gateway';
 import { EmailModule } from '../email/email.module';
 import { UsersModule } from '../users/users.module';
 import { ReservationController } from './reservation.controller';
@@ -23,7 +22,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     NotificationsModule,
   ],
   controllers: [ReservationController],
-  providers: [ReservationService, ReservationGateway],
+  providers: [ReservationService],
   exports: [ReservationService],
 })
 export class ReservationModule {}
