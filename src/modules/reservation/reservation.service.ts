@@ -133,7 +133,7 @@ export class ReservationService {
     }
 
     reservation.status = ReservationStatus.CONFIRMED;
-    // reservation.confirmationCode = null;
+
     await reservation.save();
 
     // Send confirmation email to user with reservation details

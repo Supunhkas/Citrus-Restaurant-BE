@@ -1,5 +1,5 @@
 export default () => ({
-  port: parseInt(process.env.PORT, 10),
+  port: parseInt(process.env.PORT, 10) || 3001,
   database: {
     uri: process.env.MONGODB_URI,
   },
@@ -24,14 +24,18 @@ export default () => ({
     credentials: true,
   },
   email: {
-    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+    host: process.env.EMAIL_HOST,
     port: parseInt(process.env.EMAIL_PORT, 10) || 587,
     secure: process.env.EMAIL_SECURE === 'true',
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS,
     },
-    from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+    from: process.env.EMAIL_FROM,
+  },
+  sendgrid: {
+    apiKey: process.env.SENDGRID_API_KEY,
+    from: process.env.SENDGRID_FROM_EMAIL,
   },
   app: {
     name: process.env.APP_NAME || 'Citrus Restaurant',

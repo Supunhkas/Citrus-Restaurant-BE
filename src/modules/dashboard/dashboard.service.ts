@@ -135,7 +135,7 @@ export class DashboardService {
             createdAt: { $gte: startOfDay, $lte: endOfDay },
           })
           .sort({ reservationTime: 1 })
-          .populate('userId', 'name email') // Assuming you want user details
+          .populate('userId', 'name email')
           .lean()
           .exec(),
 

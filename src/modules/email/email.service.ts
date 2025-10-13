@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
+import * as SendGrid from '@sendgrid/mail';
 
 export interface EmailOptions {
   to: string;
@@ -18,13 +19,29 @@ export interface EmailTemplate {
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
-  private transporter: nodemailer.Transporter;
+  private transporter: nodemailer.Transporter | null = null;
+  private provider: 'smtp' | 'sendgrid';
 
-  constructor(private configService: ConfigService) {
+  constructor(private readonly configService: ConfigService) {
     this.initializeTransporter();
   }
 
   private initializeTransporter() {
+    this.provider =
+      (this.configService.get<string>('EMAIL_PROVIDER') as
+        | 'smtp'
+        | 'sendgrid') || 'smtp';
+
+    this.logger.log(`Email provider: ${this.provider}`);
+
+    if (this.provider === 'sendgrid') {
+      this.initializeSendGrid();
+    } else {
+      this.initializeSMTP();
+    }
+  }
+
+  private initializeSMTP() {
     const emailConfig = this.configService.get('email');
 
     this.transporter = nodemailer.createTransport({
@@ -37,36 +54,56 @@ export class EmailService {
       },
     });
 
-    // Verify connection configuration
     this.transporter.verify((error, success) => {
       if (error) {
-        this.logger.error('Email transporter verification failed:', error);
+        this.logger.error('❌ SMTP verification failed:', error);
       } else {
-        console.log(success);
-        this.logger.log('Email transporter is ready to send messages');
+        this.logger.log('✅ SMTP transporter ready to send emails');
       }
     });
   }
 
-  async sendEmail(options: EmailOptions): Promise<boolean> {
+  private initializeSendGrid() {
+    const apiKey = this.configService.get<string>('SENDGRID_API_KEY');
+
+    if (!apiKey) throw new Error('Missing SENDGRID_API_KEY');
+    SendGrid.setApiKey(apiKey);
+    this.logger.log('✅ SendGrid initialized successfully');
+  }
+
+  async sendEmail({
+    to,
+    subject,
+    html,
+    text,
+  }: {
+    to: string;
+    subject: string;
+    html: string;
+    text?: string;
+  }): Promise<boolean> {
     try {
-      const emailConfig = this.configService.get('email');
+      if (this.provider === 'sendgrid') {
+        const from = this.configService.get<string>('SENDGRID_FROM_EMAIL');
 
-      const mailOptions = {
-        from: emailConfig.from,
-        to: options.to,
-        subject: options.subject,
-        html: options.html,
-        text: options.text,
-      };
+        await SendGrid.send({ to, from, subject, html, text });
+      } else if (this.transporter) {
+        const emailConfig = this.configService.get('email');
+        await this.transporter.sendMail({
+          from: emailConfig.from,
+          to,
+          subject,
+          html,
+          text,
+        });
+      } else {
+        throw new Error('No email transporter available');
+      }
 
-      const info = await this.transporter.sendMail(mailOptions);
-      this.logger.log(
-        `Email sent successfully to ${options.to}: ${info.messageId}`,
-      );
+      this.logger.log(`✅ Email sent successfully to ${to}`);
       return true;
     } catch (error) {
-      this.logger.error(`Failed to send email to ${options.to}:`, error);
+      this.logger.error(`❌ Failed to send email to ${to}:`, error.message);
       return false;
     }
   }
@@ -74,7 +111,6 @@ export class EmailService {
   async sendEmailVerification(email: string, token: string): Promise<boolean> {
     const appConfig = this.configService.get('app');
     const verificationUrl = `${appConfig.url}/auth/verify-email/${token}`;
-
     const template = this.getEmailVerificationTemplate(verificationUrl);
 
     return this.sendEmail({
