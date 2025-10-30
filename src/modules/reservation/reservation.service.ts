@@ -165,18 +165,26 @@ export class ReservationService {
   async getReservations(
     userId?: Types.ObjectId,
     status?: ReservationStatus,
-    date?: string,
+    startDate?: string,
+    endDate?: string,
     search?: string,
   ): Promise<Reservation[]> {
     const filter: any = {};
     if (userId) filter.userId = userId;
     if (status) filter.status = status;
-    if (date) {
-      const start = new Date(date);
-      const end = new Date(date);
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
       end.setUTCHours(23, 59, 59, 999);
 
       filter.reservationDate = { $gte: start, $lte: end };
+    } else if (startDate) {
+      const start = new Date(startDate);
+      filter.reservationDate = { $gte: start };
+    } else if (endDate) {
+      const end = new Date(endDate);
+      end.setUTCHours(23, 59, 59, 999);
+      filter.reservationDate = { $lte: end };
     }
 
     if (search) {

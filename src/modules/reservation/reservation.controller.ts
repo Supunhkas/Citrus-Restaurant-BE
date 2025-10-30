@@ -50,16 +50,18 @@ export class ReservationController {
   async getReservations(
     @Req() req,
     @Query('status') status?: string,
-    @Query('date') date?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
     @Query('search') search?: string,
   ) {
     const userId = req.user?.role === 'admin' ? undefined : req.user?._id;
-
+    console.log('getReservations', userId, status, startDate, endDate, search);
     const statusEnum = status as ReservationStatus;
     return this.reservationService.getReservations(
       userId,
       statusEnum,
-      date,
+      startDate,
+      endDate,
       search,
     );
   }
