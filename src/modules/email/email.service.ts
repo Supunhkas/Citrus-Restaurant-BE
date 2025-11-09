@@ -54,7 +54,7 @@ export class EmailService {
       },
     });
 
-    this.transporter.verify((error, success) => {
+    this.transporter.verify((error) => {
       if (error) {
         this.logger.error('❌ SMTP verification failed:', error);
       } else {

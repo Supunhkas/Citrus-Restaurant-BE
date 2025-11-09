@@ -10,8 +10,6 @@ import { LoginDto } from './dto/login.dto';
 describe('AuthService', () => {
   let service: AuthService;
   let usersService: UsersService;
-  let jwtService: JwtService;
-  let configService: ConfigService;
 
   const mockUsersService = {
     create: jest.fn(),
@@ -54,8 +52,6 @@ describe('AuthService', () => {
 
     service = module.get<AuthService>(AuthService);
     usersService = module.get<UsersService>(UsersService);
-    jwtService = module.get<JwtService>(JwtService);
-    configService = module.get<ConfigService>(ConfigService);
   });
 
   afterEach(() => {
@@ -71,22 +67,15 @@ describe('AuthService', () => {
       const registerDto: RegisterDto = {
         email: 'test@example.com',
         password: 'SecurePass123!',
-        firstName: 'John',
-        lastName: 'Doe',
+        name: 'John',
       };
 
       const mockUser = {
         _id: 'user-id',
         email: 'test@example.com',
-        firstName: 'John',
-        lastName: 'Doe',
+        name: 'John',
         role: 'user',
         isEmailVerified: false,
-      };
-
-      const mockTokens = {
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
       };
 
       mockUsersService.create.mockResolvedValue(mockUser);

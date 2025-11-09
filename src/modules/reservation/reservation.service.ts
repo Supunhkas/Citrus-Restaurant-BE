@@ -195,6 +195,8 @@ export class ReservationService {
       ];
     }
 
+    console.log('Filter:', filter);
+
     const res = await this.reservationModel
       .find(filter)
       .sort({ reservationDate: -1 })

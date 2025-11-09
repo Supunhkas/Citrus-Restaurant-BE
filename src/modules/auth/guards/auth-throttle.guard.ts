@@ -8,9 +8,7 @@ export class AuthThrottleGuard extends ThrottlerGuard {
     return req.ips.length ? req.ips[0] : req.ip;
   }
 
-  protected getThrottleOptions(context: any) {
-    // Stricter limits for auth endpoints
-
+  protected getThrottleOptions() {
     return {
       ttl: 60 * 1000, // 1 minute
       limit: 5, // 5 attempts per minute
