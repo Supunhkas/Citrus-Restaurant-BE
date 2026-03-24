@@ -8,7 +8,6 @@ export class UsersController {
 
   @Get('details')
   async getUserDetails(@CurrentUser() user: any) {
-    console.log('User', user.id);
     return await this.userService.findById(user.id);
   }
 }

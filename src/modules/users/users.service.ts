@@ -178,7 +178,6 @@ export class UsersService {
         `Failed to update device token for user ${userId}`,
         error.stack,
       );
-      // Don't throw - token update failure shouldn't break login
     }
   }
   async updateFcmToken(userId: string, fcm: string): Promise<void> {
@@ -191,13 +190,11 @@ export class UsersService {
         },
         { new: true },
       );
-      `Fcm token updated for user: ${userId}`;
     } catch (error) {
       console.error(
         `Failed to update Fcm token for user ${userId}`,
         error.stack,
       );
-      // Don't throw - token update failure shouldn't break login
     }
   }
 
@@ -211,7 +208,6 @@ export class UsersService {
         },
         { new: true },
       );
-      `Device token removed for user: ${userId}`;
     } catch (error) {
       console.error(
         `Failed to remove device token for user ${userId}`,

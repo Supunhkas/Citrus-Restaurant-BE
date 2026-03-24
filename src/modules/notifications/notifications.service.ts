@@ -55,8 +55,6 @@ export class NotificationsService {
       data,
     }));
 
-    console.log(messages);
-
     const chunks = this.expo.chunkPushNotifications(messages);
     for (const chunk of chunks) {
       try {

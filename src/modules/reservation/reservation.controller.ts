@@ -55,7 +55,6 @@ export class ReservationController {
     @Query('search') search?: string,
   ) {
     const userId = req.user?.role === 'admin' ? undefined : req.user?._id;
-    console.log('getReservations', userId, status, startDate, endDate, search);
     const statusEnum = status as ReservationStatus;
     return this.reservationService.getReservations(
       userId,
@@ -80,6 +79,7 @@ export class ReservationController {
     @Param('id') id: string,
     @Body() dto: ActionTypeReservationDto,
   ) {
+    console.log('rejectReservation', id, dto);
     return this.reservationService.rejectReservation(id, dto);
   }
 }

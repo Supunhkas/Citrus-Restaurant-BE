@@ -51,8 +51,6 @@ export class DashboardService {
 
   async getKpiData(): Promise<KpiData> {
     try {
-      this.logger.log('Fetching KPI data');
-
       const kpiResults = await this.reservationModel.aggregate([
         {
           $group: {
@@ -110,9 +108,6 @@ export class DashboardService {
         rejectionRate: Math.round(rejectionRate * 100) / 100,
       };
 
-      this.logger.log(
-        `KPI data fetched successfully: ${data.total} total reservations`,
-      );
       return dashboardData;
     } catch (error) {
       this.logger.error('Error fetching KPI data', error.stack);
@@ -170,8 +165,6 @@ export class DashboardService {
           byStatus[status] = 0;
         }
       });
-
-      this.logger.log(`Found ${reservations.length} reservations for today`);
 
       return {
         reservations: reservations as ReservationDocument[],
@@ -391,8 +384,6 @@ export class DashboardService {
 
   async getDashboardSummary(): Promise<any> {
     try {
-      this.logger.log('Fetching complete dashboard summary');
-
       const [kpiData, todayReservations, weeklyStats] = await Promise.all([
         this.getKpiData(),
         this.getTodayReservations(),
