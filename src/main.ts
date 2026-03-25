@@ -3,6 +3,8 @@ import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
+import * as compression from 'compression';
+import { json, urlencoded } from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -32,22 +34,14 @@ async function bootstrap() {
   );
 
   // CORS configuration
-  app.enableCors();
+  app.enableCors(configService.get('cors'));
 
-  // Request size limits
-  app.use((req, res, next) => {
-    const contentLength = parseInt(req.headers['content-length'] || '0', 10);
-    const maxSize = 10 * 1024 * 1024;
+  // Compression
+  app.use(compression());
 
-    if (contentLength > maxSize) {
-      return res.status(413).json({
-        statusCode: 413,
-        message: 'Request entity too large',
-        error: 'Payload Too Large',
-      });
-    }
-    next();
-  });
+  // Request size limits (10MB) via built-in body parser
+  app.use(json({ limit: '10mb' }));
+  app.use(urlencoded({ limit: '10mb', extended: true }));
 
   const port = process.env.PORT || configService.get<number>('port') || 3001;
 
