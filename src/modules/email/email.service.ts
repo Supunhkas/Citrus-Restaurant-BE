@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import * as SendGrid from '@sendgrid/mail';
-
+import { BrevoClient } from '@getbrevo/brevo';
 export interface EmailOptions {
   to: string;
   subject: string;
@@ -20,7 +20,8 @@ export interface EmailTemplate {
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private transporter: nodemailer.Transporter | null = null;
-  private provider: 'smtp' | 'sendgrid';
+  private brevoClient: BrevoClient | null = null;
+  private provider: 'smtp' | 'sendgrid' | 'brevo';
 
   constructor(private readonly configService: ConfigService) {
     this.initializeTransporter();
@@ -30,12 +31,15 @@ export class EmailService {
     this.provider =
       (this.configService.get<string>('EMAIL_PROVIDER') as
         | 'smtp'
-        | 'sendgrid') || 'smtp';
+        | 'sendgrid'
+        | 'brevo') || 'smtp';
 
     this.logger.log(`Email provider: ${this.provider}`);
 
     if (this.provider === 'sendgrid') {
       this.initializeSendGrid();
+    } else if (this.provider === 'brevo') {
+      this.initializeBrevo();
     } else {
       this.initializeSMTP();
     }
@@ -71,6 +75,18 @@ export class EmailService {
     this.logger.log('✅ SendGrid initialized successfully');
   }
 
+  private initializeBrevo() {
+    const apiKey = this.configService.get<string>('brevo.apiKey');
+
+    if (!apiKey) throw new Error('Missing BREVO_API_KEY');
+
+    this.brevoClient = new BrevoClient({
+      apiKey,
+    });
+
+    this.logger.log('✅ Brevo initialized successfully');
+  }
+
   async sendEmail({
     to,
     subject,
@@ -87,6 +103,25 @@ export class EmailService {
         const from = this.configService.get<string>('SENDGRID_FROM_EMAIL');
 
         await SendGrid.send({ to, from, subject, html, text });
+      } else if (this.provider === 'brevo') {
+        if (!this.brevoClient) {
+          throw new Error('Brevo client not initialized');
+        }
+
+        const fromEmail = this.configService.get<string>('email.from');
+        const fromName =
+          this.configService.get<string>('app.name') || 'Citrus Restaurant';
+
+        await this.brevoClient.transactionalEmails.sendTransacEmail({
+          subject,
+          textContent: text,
+          htmlContent: html,
+          sender: {
+            name: fromName,
+            email: fromEmail,
+          },
+          to: [{ email: to }],
+        });
       } else if (this.transporter) {
         const emailConfig = this.configService.get('email');
         await this.transporter.sendMail({
@@ -103,7 +138,9 @@ export class EmailService {
       this.logger.log(`✅ Email sent successfully to ${to}`);
       return true;
     } catch (error) {
-      this.logger.error(`❌ Failed to send email to ${to}:`, error.message);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this.logger.error(`❌ Failed to send email to ${to}:`, errorMessage);
       return false;
     }
   }

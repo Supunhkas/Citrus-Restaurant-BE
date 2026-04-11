@@ -37,6 +37,9 @@ export default () => ({
     apiKey: process.env.SENDGRID_API_KEY,
     from: process.env.SENDGRID_FROM_EMAIL,
   },
+  brevo: {
+    apiKey: process.env.BREVO_API_KEY,
+  },
   app: {
     name: process.env.APP_NAME || 'Citrus Restaurant',
     url: process.env.APP_URL || 'http://localhost:3000',
