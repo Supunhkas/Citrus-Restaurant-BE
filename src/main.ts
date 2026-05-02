@@ -7,7 +7,7 @@ import * as compression from 'compression';
 import { json, urlencoded } from 'express';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   const configService = app.get(ConfigService);
 
   // Security middleware - Helmet
@@ -37,7 +37,7 @@ async function bootstrap() {
   app.enableCors(configService.get('cors'));
 
   // Compression
-  app.use(compression());
+  // app.use(compression());
 
   // Request size limits (10MB) via built-in body parser
   app.use(json({ limit: '10mb' }));

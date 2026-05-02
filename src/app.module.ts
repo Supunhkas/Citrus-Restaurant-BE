@@ -14,6 +14,7 @@ import configuration from './config/configuration';
 import { ReservationModule } from './modules/reservation/reservation.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { PaymentsModule } from './modules/payments/payments.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     ReservationModule,
     DashboardModule,
     NotificationsModule,
+    PaymentsModule,
   ],
   controllers: [AppController],
   providers: [

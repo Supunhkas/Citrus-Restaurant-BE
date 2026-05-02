@@ -6,6 +6,14 @@ export enum ReservationStatus {
   CONFIRMED = 'CONFIRMED',
   APPROVED = 'APPROVED',
   REJECTED = 'REJECTED',
+  PAYMENT_PENDING = 'PAYMENT_PENDING',
+}
+
+export enum PaymentStatus {
+  NONE = 'NONE',
+  PENDING = 'PENDING',
+  COMPLETED = 'COMPLETED',
+  FAILED = 'FAILED',
 }
 
 export type ReservationDocument = Reservation & Document;
@@ -60,6 +68,19 @@ export class Reservation {
 
   @Prop()
   rejectedReason?: string;
+
+  @Prop({
+    type: String,
+    enum: PaymentStatus,
+    default: PaymentStatus.NONE,
+  })
+  paymentStatus: PaymentStatus;
+
+  @Prop()
+  stripeSessionId?: string;
+
+  @Prop({ required: false, default: 0 })
+  paymentAmount: number;
 }
 
 export const ReservationSchema = SchemaFactory.createForClass(Reservation);

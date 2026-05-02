@@ -1,4 +1,5 @@
-import { Injectable, ConflictException, Logger } from '@nestjs/common';
+import { Injectable, ConflictException, BadRequestException, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import {
@@ -12,6 +13,10 @@ import { ActionTypeReservationDto } from './dto/actionDto';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { Counter, CounterDocument } from 'src/schema/counter/counter.schema';
 import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationsGateway } from '../notifications/notifications.gateway';
+import { PaymentsService } from '../payments/payments.service';
+import { PaymentStatus } from '../../schema/reservation/reservation.schema';
+import { reservationEmailTemplates } from './reservation-email.template';
 
 @Injectable()
 export class ReservationService {
@@ -26,10 +31,17 @@ export class ReservationService {
 
     private readonly usersService: UsersService,
     private readonly expoService: NotificationsService,
+    private readonly notificationsGateway: NotificationsGateway,
+    private readonly paymentsService: PaymentsService,
+    private readonly configService: ConfigService,
   ) {}
 
   private generateConfirmationCode(): string {
     return Math.random().toString(36).substring(2, 10).toUpperCase();
+  }
+
+  private getAppName(): string {
+    return this.configService.get<string>('app.name') || 'Citrus Restaurant';
   }
 
   // Helper: Send Expo push notification to all admins
@@ -70,6 +82,59 @@ export class ReservationService {
 
   //! Create a new reservation
   async createReservation(dto: CreateReservationDto): Promise<Reservation> {
+    const reservationDate = new Date(dto.reservationDate);
+    const now = new Date();
+    now.setHours(0, 0, 0, 0); // Start of today
+
+    // 1. Prevent past dates
+    if (reservationDate < now) {
+      throw new BadRequestException('Cannot book a reservation for a past date');
+    }
+
+    // 2. Limit guests per reservation to 15
+    if (dto.guests > 15) {
+      throw new BadRequestException('Maximum guests per reservation is 15');
+    }
+
+    // 3. Prevent duplicate active reservations for same email/date/time
+    const existing = await this.reservationModel.findOne({
+      email: dto.email,
+      reservationDate: dto.reservationDate,
+      reservationTime: dto.reservationTime,
+      status: { $ne: ReservationStatus.REJECTED },
+    });
+
+    if (existing) {
+      throw new ConflictException(
+        'You already have an active reservation for this time slot',
+      );
+    }
+
+    // 3. Capacity Check (Example: Max 40 guests per time slot)
+    const MAX_CAPACITY = 40;
+    const currentBookings = await this.reservationModel.aggregate([
+      {
+        $match: {
+          reservationDate: dto.reservationDate,
+          reservationTime: dto.reservationTime,
+          status: { $in: [ReservationStatus.PENDING, ReservationStatus.CONFIRMED, ReservationStatus.APPROVED] },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalGuests: { $sum: '$guests' },
+        },
+      },
+    ]);
+
+    const totalGuests = currentBookings.length > 0 ? currentBookings[0].totalGuests : 0;
+    if (totalGuests + dto.guests > MAX_CAPACITY) {
+      throw new ConflictException(
+        'Sorry, we are fully booked for this time slot. Please try another time.',
+      );
+    }
+
     const confirmationCode = this.generateConfirmationCode();
 
     // Generate reservationId
@@ -84,11 +149,37 @@ export class ReservationService {
       confirmationCode,
     });
     await reservation.save();
+
+    // If guests > 4, payment is required
+    if (reservation.guests > 4) {
+      const session = await this.paymentsService.createCheckoutSession(
+        reservation._id.toString(),
+        30, // 30 AUD
+        reservation.email,
+      );
+
+      reservation.paymentStatus = PaymentStatus.PENDING;
+      reservation.status = ReservationStatus.PAYMENT_PENDING;
+      reservation.stripeSessionId = session.id;
+      await reservation.save();
+
+      return {
+        ...reservation.toObject(),
+        paymentRequired: true,
+        stripeSessionUrl: session.url,
+      } as any;
+    }
+
     if (reservation.email) {
+      const template = reservationEmailTemplates.confirmationCode(
+        reservation.name,
+        confirmationCode,
+        this.getAppName(),
+      );
       await this.emailService.sendEmail({
         to: reservation.email,
-        subject: 'Your Reservation Confirmation Code',
-        html: `<p>Your confirmation code is: <b>${confirmationCode}</b></p>`,
+        subject: template.subject,
+        html: template.html,
       });
     }
 
@@ -100,6 +191,9 @@ export class ReservationService {
         _id: reservation._id.toString(),
       },
     );
+
+    // Real-time WebSocket notification
+    this.notificationsGateway.notifyNewReservation(reservation);
 
     return reservation;
   }
@@ -113,6 +207,15 @@ export class ReservationService {
 
     if (!reservation) {
       throw new ConflictException('Invalid confirmation code');
+    }
+
+    if (
+      reservation.guests > 4 &&
+      reservation.paymentStatus !== PaymentStatus.COMPLETED
+    ) {
+      throw new ConflictException(
+        'Deposit payment required before confirming reservation',
+      );
     }
 
     // Time restriction: confirmation must be within 1 hour of creation
@@ -138,17 +241,19 @@ export class ReservationService {
 
     // Send confirmation email to user with reservation details
     if (reservation.email) {
+      const template = reservationEmailTemplates.confirmed(
+        reservation.name,
+        reservation.reservationDate
+          ? new Date(reservation.reservationDate).toLocaleDateString()
+          : 'N/A',
+        reservation.reservationTime || 'N/A',
+        this.getAppName(),
+      );
+
       await this.emailService.sendEmail({
         to: reservation.email,
-        subject: 'Your Reservation is Confirmed',
-        html: `<h2>Reservation Confirmed</h2>
-          <p>Dear ${reservation.name || 'Guest'},</p>
-          <p>Your reservation has been successfully confirmed.</p>
-          <ul>
-            <li><b>Date:</b> ${reservation.reservationDate ? new Date(reservation.reservationDate).toLocaleDateString() : 'N/A'}</li>
-            <li><b>Reservation Time:</b> ${reservation.reservationTime || 'N/A'}</li>
-          </ul>
-          <p>Thank you for choosing Citrus Restaurant!</p>`,
+        subject: template.subject,
+        html: template.html,
       });
     }
 
@@ -158,6 +263,10 @@ export class ReservationService {
       `${reservation.name} on ${reservation.reservationDate ? new Date(reservation.reservationDate).toLocaleDateString() : ''} has been confirmed.`,
       { screen: 'reservation', _id: reservation._id.toString() },
     );
+
+    // Real-time WebSocket notification
+    this.notificationsGateway.notifyReservationConfirmed(reservation);
+
     return reservation;
   }
 
@@ -227,11 +336,16 @@ export class ReservationService {
     );
 
     if (reservation.email) {
-      await this.emailService.sendReservationUpdate(reservation.email, {
-        name: reservation.name,
-        status: 'APPROVED',
-        reservationDate: reservation.reservationDate.toISOString(),
-        tableNumber: reservation.tableNumber,
+      const template = reservationEmailTemplates.update(
+        reservation.name,
+        'APPROVED',
+        reservation.reservationDate.toLocaleDateString(),
+        this.getAppName(),
+      );
+      await this.emailService.sendEmail({
+        to: reservation.email,
+        subject: template.subject,
+        html: template.html,
       });
     }
 
@@ -258,6 +372,7 @@ export class ReservationService {
     reservation.notes = dto.reason;
 
     await reservation.save();
+
     // Notify all admins
     await this.notifyAdminsExpo(
       'Reservation Rejected',
@@ -266,12 +381,17 @@ export class ReservationService {
     );
     // Send email to guest (if email exists)
     if (reservation.email) {
-      await this.emailService.sendReservationUpdate(reservation.email, {
-        name: reservation.name,
-        status: 'REJECTED',
-        reservationDate: reservation.reservationDate.toLocaleDateString(),
-        tableNumber: reservation.tableNumber,
-        reason: dto.reason,
+      const template = reservationEmailTemplates.update(
+        reservation.name,
+        'REJECTED',
+        reservation.reservationDate.toLocaleDateString(),
+        this.getAppName(),
+        dto.reason,
+      );
+      await this.emailService.sendEmail({
+        to: reservation.email,
+        subject: template.subject,
+        html: template.html,
       });
     }
 
@@ -289,11 +409,17 @@ export class ReservationService {
         'No pending reservation found for this contact',
       );
     }
+
     if (reservation.email) {
+      const template = reservationEmailTemplates.confirmationCode(
+        reservation.name,
+        reservation.confirmationCode,
+        this.getAppName(),
+      );
       await this.emailService.sendEmail({
         to: reservation.email,
-        subject: 'Your Reservation Confirmation Code',
-        html: `<p>Your confirmation code is: <b>${reservation.confirmationCode}</b></p>`,
+        subject: template.subject,
+        html: template.html,
       });
     }
     // TODO: Integrate SMS sending if required

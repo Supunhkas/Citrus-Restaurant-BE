@@ -10,6 +10,7 @@ import { UsersModule } from '../users/users.module';
 import { ReservationController } from './reservation.controller';
 import { Counter, CounterSchema } from 'src/schema/counter/counter.schema';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { PaymentsModule } from '../payments/payments.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
       { name: Counter.name, schema: CounterSchema },
     ]),
     NotificationsModule,
+    PaymentsModule,
   ],
   controllers: [ReservationController],
   providers: [ReservationService],

@@ -9,6 +9,7 @@ import {
   UseGuards,
   Req,
   Put,
+  Logger,
 } from '@nestjs/common';
 import { ReservationService } from './reservation.service';
 import { CreateReservationDto } from './dto/create-reservation.dto';
@@ -23,6 +24,7 @@ import { Public } from 'src/common/decorators/public.decorator';
 
 @Controller('reservations')
 export class ReservationController {
+  private readonly logger = new Logger(ReservationController.name);
   constructor(private readonly reservationService: ReservationService) {}
 
   @Public()
@@ -79,7 +81,7 @@ export class ReservationController {
     @Param('id') id: string,
     @Body() dto: ActionTypeReservationDto,
   ) {
-    console.log('rejectReservation', id, dto);
+    this.logger.log(`Rejecting reservation ${id} with reason: ${dto.reason}`);
     return this.reservationService.rejectReservation(id, dto);
   }
 }
