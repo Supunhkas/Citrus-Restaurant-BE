@@ -15,6 +15,7 @@ import { ReservationModule } from './modules/reservation/reservation.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { MenuModule } from './modules/menu/menu.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
     DashboardModule,
     NotificationsModule,
     PaymentsModule,
+    MenuModule,
   ],
   controllers: [AppController],
   providers: [

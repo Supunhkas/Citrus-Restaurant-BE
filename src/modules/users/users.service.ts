@@ -220,4 +220,28 @@ export class UsersService {
   async findByDeviceToken(deviceToken: string): Promise<User[]> {
     return this.userModel.find({ deviceToken }).exec();
   }
+
+  // ── Refresh token management ─────────────────────────────────────────────
+
+  async saveRefreshToken(userId: string, plainToken: string): Promise<void> {
+    const hash = await argon2.hash(plainToken);
+    await this.userModel.findByIdAndUpdate(userId, { refreshTokenHash: hash });
+  }
+
+  async findByValidRefreshToken(
+    userId: string,
+    plainToken: string,
+  ): Promise<User | null> {
+    const user = await this.userModel.findById(userId).exec();
+    if (!user?.refreshTokenHash) return null;
+
+    const isValid = await argon2.verify(user.refreshTokenHash, plainToken);
+    return isValid ? user : null;
+  }
+
+  async removeRefreshToken(userId: string): Promise<void> {
+    await this.userModel.findByIdAndUpdate(userId, {
+      refreshTokenHash: null,
+    });
+  }
 }

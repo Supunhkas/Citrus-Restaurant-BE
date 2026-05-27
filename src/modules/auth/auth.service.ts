@@ -124,31 +124,52 @@ export class AuthService {
   }
 
   async refreshToken(refreshToken: string): Promise<AuthResponseDto> {
+    // 1. Verify the JWT signature and expiry using the dedicated refresh secret.
+    //    This immediately rejects any access token presented here (different secret).
+    let payload: any;
     try {
-      const payload = await this.jwtService.verifyAsync(refreshToken, {
-        secret: this.configService.get<string>('jwt.secret'),
+      payload = await this.jwtService.verifyAsync(refreshToken, {
+        secret: this.configService.get<string>('jwt.refreshSecret'),
       });
-
-      const user = await this.usersService.findById(payload.sub);
-      if (!user?.isActive) {
-        throw new UnauthorizedException('Invalid refresh token');
-      }
-
-      const tokens = await this.generateTokens(user);
-
-      return new AuthResponseDto({
-        id: (user as any)._id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        isEmailVerified: user.isEmailVerified,
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-      });
-    } catch (error) {
-      this.logger.error('Error verifying refresh token', error);
+    } catch {
       throw new UnauthorizedException('Invalid refresh token');
     }
+
+    // 2. Confirm the token type so access tokens are definitively rejected
+    //    even if someone somehow obtained the refresh secret.
+    if (payload.type !== 'refresh') {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    // 3. Look up the user and verify the token hash stored in the DB.
+    //    This makes every refresh token single-use-until-rotated AND
+    //    means logout (which clears the hash) immediately invalidates
+    //    any outstanding refresh token.
+    const user = await this.usersService.findByValidRefreshToken(
+      payload.sub,
+      refreshToken,
+    );
+
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    // 4. Rotate: issue a brand-new pair and overwrite the stored hash.
+    const tokens = await this.generateTokens(user);
+    await this.usersService.saveRefreshToken(
+      (user as any)._id.toString(),
+      tokens.refreshToken,
+    );
+
+    return new AuthResponseDto({
+      id: (user as any)._id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      isEmailVerified: user.isEmailVerified,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+    });
   }
 
   async verifyEmail(token: string): Promise<{ message: string }> {
@@ -181,29 +202,37 @@ export class AuthService {
   }
 
   async logout(userId: string): Promise<{ message: string }> {
-    // In a real application, you might want to blacklist the refresh token
-    this.logger.log(`User logout: ${userId}`);
+    await this.usersService.removeRefreshToken(userId);
+    this.logger.log(`User logged out: ${userId}`);
     return { message: 'Logged out successfully' };
   }
 
   private async generateTokens(
     user: any,
   ): Promise<{ accessToken: string; refreshToken: string }> {
-    const payload = {
+    const basePayload = {
       sub: (user as any)._id,
       email: user.email,
       role: user.role,
     };
 
     const [accessToken, refreshToken] = await Promise.all([
-      this.jwtService.signAsync(payload, {
-        secret: this.configService.get<string>('jwt.secret'),
-        expiresIn: this.configService.get<string>('jwt.expiresIn'),
-      }),
-      this.jwtService.signAsync(payload, {
-        secret: this.configService.get<string>('jwt.secret'),
-        expiresIn: '30d', // Refresh tokens last longer
-      }),
+      // Access token — short-lived, signed with JWT_SECRET
+      this.jwtService.signAsync(
+        { ...basePayload, type: 'access' },
+        {
+          secret: this.configService.get<string>('jwt.secret'),
+          expiresIn: this.configService.get<string>('jwt.expiresIn'),
+        },
+      ),
+      // Refresh token — long-lived, signed with JWT_REFRESH_SECRET
+      this.jwtService.signAsync(
+        { ...basePayload, type: 'refresh' },
+        {
+          secret: this.configService.get<string>('jwt.refreshSecret'),
+          expiresIn: this.configService.get<string>('jwt.refreshExpiresIn'),
+        },
+      ),
     ]);
 
     return { accessToken, refreshToken };

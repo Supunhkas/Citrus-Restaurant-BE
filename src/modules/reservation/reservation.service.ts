@@ -1,4 +1,9 @@
-import { Injectable, ConflictException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -88,7 +93,9 @@ export class ReservationService {
 
     // 1. Prevent past dates
     if (reservationDate < now) {
-      throw new BadRequestException('Cannot book a reservation for a past date');
+      throw new BadRequestException(
+        'Cannot book a reservation for a past date',
+      );
     }
 
     // 2. Limit guests per reservation to 15
@@ -117,7 +124,13 @@ export class ReservationService {
         $match: {
           reservationDate: dto.reservationDate,
           reservationTime: dto.reservationTime,
-          status: { $in: [ReservationStatus.PENDING, ReservationStatus.CONFIRMED, ReservationStatus.APPROVED] },
+          status: {
+            $in: [
+              ReservationStatus.PENDING,
+              ReservationStatus.CONFIRMED,
+              ReservationStatus.APPROVED,
+            ],
+          },
         },
       },
       {
@@ -128,7 +141,8 @@ export class ReservationService {
       },
     ]);
 
-    const totalGuests = currentBookings.length > 0 ? currentBookings[0].totalGuests : 0;
+    const totalGuests =
+      currentBookings.length > 0 ? currentBookings[0].totalGuests : 0;
     if (totalGuests + dto.guests > MAX_CAPACITY) {
       throw new ConflictException(
         'Sorry, we are fully booked for this time slot. Please try another time.',
@@ -173,7 +187,7 @@ export class ReservationService {
     if (reservation.email) {
       const template = reservationEmailTemplates.confirmationCode(
         reservation.name,
-        confirmationCode,
+        reservation.confirmationCode,
         this.getAppName(),
       );
       await this.emailService.sendEmail({

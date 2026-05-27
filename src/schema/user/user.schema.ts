@@ -36,6 +36,9 @@ export class User {
   passwordResetExpires?: Date;
 
   @Prop({ type: String, default: null })
+  refreshTokenHash?: string;
+
+  @Prop({ type: String, default: null })
   deviceToken?: string;
 
   @Prop({ type: Date, default: null })
