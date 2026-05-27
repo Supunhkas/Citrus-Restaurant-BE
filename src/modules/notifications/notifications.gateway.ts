@@ -23,7 +23,7 @@ export class NotificationsGateway
     this.logger.log('WebSocket Gateway Initialized');
   }
 
-  handleConnection(client: Socket, ...args: any[]) {
+  handleConnection(client: Socket) {
     this.logger.log(`Client connected: ${client.id}`);
   }
 
@@ -31,17 +31,19 @@ export class NotificationsGateway
     this.logger.log(`Client disconnected: ${client.id}`);
   }
 
-  /**
-   * Broadcast a new reservation event
-   */
+  // ── Reservation events ────────────────────────────────────────────────────
+
   notifyNewReservation(reservation: any) {
     this.server.emit('reservationCreated', reservation);
   }
 
-  /**
-   * Broadcast a reservation confirmation event
-   */
   notifyReservationConfirmed(reservation: any) {
     this.server.emit('reservationConfirmed', reservation);
+  }
+
+  // ── Pickup order events ───────────────────────────────────────────────────
+
+  notifyPickupOrder(order: any) {
+    this.server.emit('pickupOrderCreated', order);
   }
 }
