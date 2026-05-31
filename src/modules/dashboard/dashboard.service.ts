@@ -5,7 +5,7 @@ import {
   Reservation,
   ReservationDocument,
   ReservationStatus,
-} from 'src/schema/reservation/reservation.schema';
+} from '../../schema/reservation/reservation.schema';
 import { UsersService } from '../users/users.service';
 
 export interface KpiData {

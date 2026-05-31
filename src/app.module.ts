@@ -5,6 +5,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { CommonModule } from './common/common.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { HealthModule } from './health/health.module';
@@ -20,6 +21,7 @@ import { OrdersModule } from './modules/orders/orders.module';
 
 @Module({
   imports: [
+    CommonModule,
     ConfigModule.forRoot({
       isGlobal: true,
       load: [configuration],

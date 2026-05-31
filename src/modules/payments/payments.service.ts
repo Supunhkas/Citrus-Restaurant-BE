@@ -21,6 +21,10 @@ export class PaymentsService {
     }
   }
 
+  get isInitialized(): boolean {
+    return !!this.stripe;
+  }
+
   async createCheckoutSession(
     reservationId: string,
     amount: number,
@@ -62,6 +66,49 @@ export class PaymentsService {
       return session;
     } catch (error) {
       this.logger.error('Error creating Stripe session:', error);
+      throw error;
+    }
+  }
+
+  async createPickupOrderCheckoutSession(
+    orderId: string,
+    amount: number,
+    customerEmail?: string,
+  ) {
+    const appUrl = this.configService.get<string>('APP_URL');
+
+    if (!this.stripe) {
+      throw new Error(
+        'Stripe is not initialized. Please provide a STRIPE_SECRET_KEY.',
+      );
+    }
+
+    try {
+      const session = await this.stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price_data: {
+              currency: 'aud',
+              product_data: {
+                name: 'Pickup Order Payment',
+                description: `Payment for order ID: ${orderId}`,
+              },
+              unit_amount: Math.round(amount * 100),
+            },
+            quantity: 1,
+          },
+        ],
+        mode: 'payment',
+        success_url: `${appUrl}/order/payment-success?session_id={CHECKOUT_SESSION_ID}&order_id=${orderId}`,
+        cancel_url: `${appUrl}/order/payment-cancelled?order_id=${orderId}`,
+        ...(customerEmail ? { customer_email: customerEmail } : {}),
+        metadata: { orderId },
+      });
+
+      return session;
+    } catch (error) {
+      this.logger.error('Error creating Stripe session for pickup order:', error);
       throw error;
     }
   }

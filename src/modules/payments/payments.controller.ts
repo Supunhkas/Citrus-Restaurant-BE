@@ -10,14 +10,7 @@ import {
 } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
 import { Request, Response } from 'express';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import {
-  Reservation,
-  ReservationDocument,
-  PaymentStatus,
-  ReservationStatus,
-} from '../../schema/reservation/reservation.schema';
+import { EventBusService } from 'src/common/utils/event-bus.service';
 import { Public } from 'src/common/decorators/public.decorator';
 
 @Controller('payments')
@@ -25,8 +18,7 @@ export class PaymentsController {
   private readonly logger = new Logger(PaymentsController.name);
   constructor(
     private readonly paymentsService: PaymentsService,
-    @InjectModel(Reservation.name)
-    private readonly reservationModel: Model<ReservationDocument>,
+    private readonly eventBusService: EventBusService,
   ) {}
 
   @Public()
@@ -52,16 +44,23 @@ export class PaymentsController {
 
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object;
-      const reservationId = session.metadata.reservationId;
+      const { reservationId, orderId } = session.metadata ?? {};
 
-      await this.reservationModel.findOneAndUpdate(
-        { _id: reservationId },
-        {
-          paymentStatus: PaymentStatus.COMPLETED,
-          status: ReservationStatus.PENDING, // Now it can move to pending status
+      if (orderId) {
+        this.logger.log(`Stripe payment completed for pickup order: ${orderId}`);
+        this.eventBusService.emit('order.payment.success', {
+          orderId,
           stripeSessionId: session.id,
-        },
-      );
+        });
+      } else if (reservationId) {
+        this.logger.log(`Stripe payment completed for reservation: ${reservationId}`);
+        this.eventBusService.emit('payment.success', {
+          reservationId,
+          stripeSessionId: session.id,
+        });
+      } else {
+        this.logger.warn('Stripe webhook: no orderId or reservationId in metadata');
+      }
     }
 
     res.status(HttpStatus.OK).json({ received: true });

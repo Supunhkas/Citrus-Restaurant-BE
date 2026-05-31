@@ -3,6 +3,7 @@ import {
   ConflictException,
   BadRequestException,
   Logger,
+  OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
@@ -22,9 +23,10 @@ import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { PaymentsService } from '../payments/payments.service';
 import { PaymentStatus } from '../../schema/reservation/reservation.schema';
 import { reservationEmailTemplates } from './reservation-email.template';
+import { EventBusService } from 'src/common/utils/event-bus.service';
 
 @Injectable()
-export class ReservationService {
+export class ReservationService implements OnModuleInit {
   private readonly logger = new Logger(ReservationService.name);
   constructor(
     @InjectModel(Reservation.name)
@@ -39,7 +41,18 @@ export class ReservationService {
     private readonly notificationsGateway: NotificationsGateway,
     private readonly paymentsService: PaymentsService,
     private readonly configService: ConfigService,
+    private readonly eventBusService: EventBusService,
   ) {}
+
+  onModuleInit() {
+    this.eventBusService.on('payment.success', async (data) => {
+      try {
+        await this.handlePaymentSuccess(data.reservationId, data.stripeSessionId);
+      } catch (err) {
+        this.logger.error(`Failed to handle payment success for reservation ${data.reservationId}: ${err.message}`, err.stack);
+      }
+    });
+  }
 
   private generateConfirmationCode(): string {
     return Math.random().toString(36).substring(2, 10).toUpperCase();
@@ -56,20 +69,13 @@ export class ReservationService {
     data?: Record<string, string>,
   ) {
     try {
-      const admins = await this.usersService['userModel']
-        .find({
-          role: 'admin',
-          deviceToken: { $exists: true, $ne: null },
-        })
-        .select('deviceToken')
-        .lean();
+      const tokens = await this.usersService.findAdminDeviceTokens();
 
-      if (!admins || admins.length === 0) {
+      if (!tokens || tokens.length === 0) {
         this.logger.warn('No admin Expo push tokens found');
         return;
       }
 
-      const tokens = admins.map((a) => a.deviceToken).filter(Boolean);
       await this.expoService.sendMulticast(tokens, title, body, data);
     } catch (error) {
       this.logger.error('Error notifying admins via Expo', error);
@@ -437,5 +443,55 @@ export class ReservationService {
       });
     }
     // TODO: Integrate SMS sending if required
+  }
+
+  async handlePaymentSuccess(
+    reservationId: string,
+    stripeSessionId: string,
+  ): Promise<Reservation> {
+    const reservation = await this.reservationModel.findByIdAndUpdate(
+      reservationId,
+      {
+        paymentStatus: PaymentStatus.COMPLETED,
+        status: ReservationStatus.PENDING,
+        stripeSessionId,
+      },
+      { new: true },
+    );
+
+    if (!reservation) {
+      throw new Error(`Reservation ${reservationId} not found`);
+    }
+
+    this.logger.log(`Reservation ${reservationId} marked as paid. Status is now PENDING.`);
+
+    // 1. Send confirmation email to user with confirmation code
+    if (reservation.email) {
+      const template = reservationEmailTemplates.confirmationCode(
+        reservation.name,
+        reservation.confirmationCode,
+        this.getAppName(),
+      );
+      await this.emailService.sendEmail({
+        to: reservation.email,
+        subject: template.subject,
+        html: template.html,
+      });
+    }
+
+    // 2. Notify all admins via Expo push notification
+    await this.notifyAdminsExpo(
+      'New Reservation (Deposit Paid)',
+      `Reservation on ${new Date(reservation.reservationDate).toLocaleDateString()} ${reservation.reservationTime} by ${reservation.name}`,
+      {
+        screen: 'reservation',
+        _id: reservation._id.toString(),
+      },
+    );
+
+    // 3. Real-time WebSocket notification for admin dashboard
+    this.notificationsGateway.notifyNewReservation(reservation);
+
+    return reservation;
   }
 }

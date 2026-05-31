@@ -4,11 +4,19 @@ import { Document } from 'mongoose';
 export type PickupOrderDocument = PickupOrder & Document;
 
 export enum PickupOrderStatus {
+  PAYMENT_PENDING = 'payment_pending',
   PENDING = 'pending',
   CONFIRMED = 'confirmed',
   READY = 'ready',
   COMPLETED = 'completed',
   CANCELLED = 'cancelled',
+}
+
+export enum PickupOrderPaymentStatus {
+  NONE = 'NONE',
+  PENDING = 'PENDING',
+  COMPLETED = 'COMPLETED',
+  FAILED = 'FAILED',
 }
 
 export interface OrderItem {
@@ -57,6 +65,20 @@ export class PickupOrder {
   // Estimated pickup time set by admin
   @Prop({ default: null })
   estimatedPickupTime: Date | null;
+
+  // Payment tracking
+  @Prop({
+    type: String,
+    enum: PickupOrderPaymentStatus,
+    default: PickupOrderPaymentStatus.NONE,
+  })
+  paymentStatus: PickupOrderPaymentStatus;
+
+  @Prop({ default: null })
+  stripeSessionId: string | null;
+
+  @Prop({ default: 0, min: 0 })
+  paymentAmount: number;
 }
 
 export const PickupOrderSchema = SchemaFactory.createForClass(PickupOrder);

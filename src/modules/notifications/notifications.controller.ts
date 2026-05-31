@@ -1,6 +1,6 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
-import { Public } from 'src/common/decorators/public.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 
 @Controller('notifications')
 export class NotificationsController {

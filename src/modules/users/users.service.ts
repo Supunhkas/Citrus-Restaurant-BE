@@ -221,6 +221,19 @@ export class UsersService {
     return this.userModel.find({ deviceToken }).exec();
   }
 
+  async findAdminDeviceTokens(): Promise<string[]> {
+    const admins = await this.userModel
+      .find({
+        role: 'admin',
+        deviceToken: { $exists: true, $ne: null },
+      })
+      .select('deviceToken')
+      .lean()
+      .exec();
+
+    return admins.map((a) => a.deviceToken).filter(Boolean);
+  }
+
   // ── Refresh token management ─────────────────────────────────────────────
 
   async saveRefreshToken(userId: string, plainToken: string): Promise<void> {

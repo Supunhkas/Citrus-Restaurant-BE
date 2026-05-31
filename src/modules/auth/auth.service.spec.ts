@@ -6,6 +6,7 @@ import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { EmailService } from '../email/email.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -31,6 +32,12 @@ describe('AuthService', () => {
     get: jest.fn(),
   };
 
+  const mockEmailService = {
+    sendEmailVerification: jest.fn(),
+    sendWelcomeEmail: jest.fn(),
+    sendPasswordReset: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -46,6 +53,10 @@ describe('AuthService', () => {
         {
           provide: ConfigService,
           useValue: mockConfigService,
+        },
+        {
+          provide: EmailService,
+          useValue: mockEmailService,
         },
       ],
     }).compile();
@@ -101,8 +112,7 @@ describe('AuthService', () => {
       const mockUser = {
         _id: 'user-id',
         email: 'test@example.com',
-        firstName: 'John',
-        lastName: 'Doe',
+        name: 'John Doe',
         role: 'user',
         isEmailVerified: true,
         isActive: true,
@@ -167,8 +177,7 @@ describe('AuthService', () => {
       const mockUser = {
         _id: 'user-id',
         email: 'test@example.com',
-        firstName: 'John',
-        lastName: 'Doe',
+        name: 'John Doe',
         role: 'user',
         isEmailVerified: true,
         isActive: true,

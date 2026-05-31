@@ -8,6 +8,7 @@ import {
 } from 'src/schema/order/pickup-order.schema';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { UsersModule } from '../users/users.module';
+import { PaymentsModule } from '../payments/payments.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { UsersModule } from '../users/users.module';
     ]),
     NotificationsModule,
     UsersModule,
+    PaymentsModule,
   ],
   controllers: [OrdersController, OrdersAdminController],
   providers: [OrdersService],
