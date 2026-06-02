@@ -20,9 +20,11 @@ export default () => ({
     limit: parseInt(process.env.THROTTLE_LIMIT, 10) || 10,
   },
   cors: {
-    origin: process.env.ALLOWED_ORIGINS?.split(',') || [
-      'http://localhost:3000',
-    ],
+    // In production ALLOWED_ORIGINS must be set; no localhost fallback
+    origin:
+      process.env.NODE_ENV === 'production'
+        ? (process.env.ALLOWED_ORIGINS?.split(',') ?? [])
+        : (process.env.ALLOWED_ORIGINS?.split(',') ?? ['http://localhost:3000']),
     credentials: true,
   },
   email: {

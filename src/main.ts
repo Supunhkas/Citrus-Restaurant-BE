@@ -6,7 +6,19 @@ import helmet from 'helmet';
 import * as compression from 'compression';
 import { json, urlencoded } from 'express';
 
+function assertEnv(name: string, value: string | undefined): void {
+  if (!value || value.trim() === '') {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+}
+
 async function bootstrap() {
+  // Fail fast if critical secrets are absent
+  assertEnv('JWT_SECRET', process.env.JWT_SECRET);
+  assertEnv('JWT_REFRESH_SECRET', process.env.JWT_REFRESH_SECRET);
+  assertEnv('JWT_EXPIRES_IN', process.env.JWT_EXPIRES_IN);
+  assertEnv('MONGODB_URI', process.env.MONGODB_URI);
+
   const app = await NestFactory.create(AppModule, { rawBody: true });
   const configService = app.get(ConfigService);
 

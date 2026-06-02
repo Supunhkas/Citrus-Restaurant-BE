@@ -18,10 +18,10 @@ export class AuthService {
     private readonly emailService: EmailService,
   ) {}
 
-  async register(registerDto: RegisterDto): Promise<AuthResponseDto> {
+  async register(registerDto: RegisterDto): Promise<{ message: string }> {
     const user = await this.usersService.create(registerDto);
 
-    // Send email verification
+    // Send email verification — no tokens issued until the user verifies their address
     if (user.emailVerificationToken) {
       await this.emailService.sendEmailVerification(
         user.email,
@@ -29,17 +29,9 @@ export class AuthService {
       );
     }
 
-    const tokens = await this.generateTokens(user);
-
-    return new AuthResponseDto({
-      id: (user as any)._id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      isEmailVerified: user.isEmailVerified,
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
-    });
+    return {
+      message: 'Registration successful. Please check your email to verify your account before logging in.',
+    };
   }
 
   async adminLogin(loginDto: LoginDto): Promise<AuthResponseDto> {
@@ -78,7 +70,6 @@ export class AuthService {
     }
 
     const tokens = await this.generateTokens(user);
-    console.log('log success');
     const response = new AuthResponseDto({
       id: (user as any)._id,
       email: user.email,
@@ -99,13 +90,25 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    if (!user.isEmailVerified) {
+      throw new UnauthorizedException('Please verify your email address before logging in');
+    }
+
+    if (this.usersService.isAccountLocked(user)) {
+      throw new UnauthorizedException('Account temporarily locked due to too many failed login attempts. Please try again later.');
+    }
+
     const isPasswordValid = await this.usersService.verifyPassword(
       password,
       user.password,
     );
     if (!isPasswordValid) {
+      await this.usersService.recordFailedLogin((user as any)._id.toString());
       throw new UnauthorizedException('Invalid credentials');
     }
+
+    // Clear lockout on successful login
+    await this.usersService.clearFailedLogins((user as any)._id.toString());
 
     // Update last login
     await this.usersService.updateLastLogin((user as any)._id);

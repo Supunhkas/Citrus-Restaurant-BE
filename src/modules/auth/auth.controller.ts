@@ -27,7 +27,7 @@ export class AuthController {
   @Post('register')
   @UseGuards(AuthThrottleGuard)
   @HttpCode(HttpStatus.CREATED)
-  async register(@Body() registerDto: RegisterDto): Promise<AuthResponseDto> {
+  async register(@Body() registerDto: RegisterDto): Promise<any> {
     return this.authService.register(registerDto);
   }
 

@@ -25,6 +25,9 @@ export class AuthResponseDto {
   @Exclude()
   password: string;
 
+  @Expose()
+  message: string;
+
   constructor(partial: Partial<AuthResponseDto>) {
     Object.assign(this, partial);
   }

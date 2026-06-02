@@ -1,22 +1,27 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, UseGuards } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 
 @Controller('dashboard')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('admin')
 export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
   @Get('kpi-data')
   async getKpiData() {
-    return await this.dashboardService.getKpiData();
+    return this.dashboardService.getKpiData();
   }
 
   @Get('today-reservations')
   async getTodayReservations() {
-    return await this.dashboardService.getTodayReservations();
+    return this.dashboardService.getTodayReservations();
   }
 
   @Get('weekly-stats')
   async getWeeklyStats() {
-    return await this.dashboardService.weeklyStats();
+    return this.dashboardService.weeklyStats();
   }
 }

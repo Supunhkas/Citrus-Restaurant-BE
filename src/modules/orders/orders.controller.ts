@@ -31,6 +31,13 @@ export class OrdersController {
   createPickupOrder(@Body() dto: CreatePickupOrderDto) {
     return this.ordersService.createPickupOrder(dto);
   }
+
+  // GET /orders/payment-status/:orderId — public, used by the payment success page to verify
+  @Public()
+  @Get('payment-status/:orderId')
+  getPaymentStatus(@Param('orderId') orderId: string) {
+    return this.ordersService.getOrderPaymentStatus(orderId);
+  }
 }
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
@@ -41,10 +48,18 @@ export class OrdersController {
 export class OrdersAdminController {
   constructor(private readonly ordersService: OrdersService) {}
 
-  // GET /orders/admin?status=pending
+  // GET /orders/admin?status=pending&page=1&limit=50
   @Get()
-  getOrders(@Query('status') status?: PickupOrderStatus) {
-    return this.ordersService.getOrders(status);
+  getOrders(
+    @Query('status') status?: PickupOrderStatus,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.ordersService.getOrders(
+      status,
+      page ? parseInt(page, 10) : 1,
+      limit ? parseInt(limit, 10) : 50,
+    );
   }
 
   // PATCH /orders/admin/:id/status

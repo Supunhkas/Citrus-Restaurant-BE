@@ -55,6 +55,8 @@ export class ReservationController {
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
     const userId = req.user?.role === 'admin' ? undefined : req.user?._id;
     const statusEnum = status as ReservationStatus;
@@ -64,6 +66,8 @@ export class ReservationController {
       startDate,
       endDate,
       search,
+      page ? parseInt(page, 10) : 1,
+      limit ? parseInt(limit, 10) : 50,
     );
   }
 

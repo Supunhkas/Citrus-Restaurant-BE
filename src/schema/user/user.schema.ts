@@ -49,10 +49,16 @@ export class User {
 
   @Prop({ type: Date, default: null })
   fcmTokenUpdatedAt?: Date;
+
+  @Prop({ type: Number, default: 0 })
+  failedLoginAttempts: number;
+
+  @Prop({ type: Date, default: null })
+  lockUntil?: Date;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
 
-UserSchema.index({ email: 1 });
+UserSchema.index({ email: 1, isActive: 1 });
 UserSchema.index({ emailVerificationToken: 1 });
 UserSchema.index({ passwordResetToken: 1 });

@@ -43,20 +43,23 @@ export class PaymentsController {
     }
 
     if (event.type === 'checkout.session.completed') {
-      const session = event.data.object;
+      const session = event.data.object as any;
       const { reservationId, orderId } = session.metadata ?? {};
+      const amountTotal: number = session.amount_total ?? 0;
 
       if (orderId) {
         this.logger.log(`Stripe payment completed for pickup order: ${orderId}`);
         this.eventBusService.emit('order.payment.success', {
           orderId,
           stripeSessionId: session.id,
+          amountTotal,
         });
       } else if (reservationId) {
         this.logger.log(`Stripe payment completed for reservation: ${reservationId}`);
         this.eventBusService.emit('payment.success', {
           reservationId,
           stripeSessionId: session.id,
+          amountTotal,
         });
       } else {
         this.logger.warn('Stripe webhook: no orderId or reservationId in metadata');

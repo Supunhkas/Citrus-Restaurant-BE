@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto';
 import {
   Injectable,
   ConflictException,
@@ -46,16 +47,28 @@ export class ReservationService implements OnModuleInit {
 
   onModuleInit() {
     this.eventBusService.on('payment.success', async (data) => {
-      try {
-        await this.handlePaymentSuccess(data.reservationId, data.stripeSessionId);
-      } catch (err) {
-        this.logger.error(`Failed to handle payment success for reservation ${data.reservationId}: ${err.message}`, err.stack);
-      }
+      await this.withRetry(
+        () => this.handlePaymentSuccess(data.reservationId, data.stripeSessionId, data.amountTotal ?? 0),
+        `payment.success for reservation ${data.reservationId}`,
+      );
     });
   }
 
+  private async withRetry(fn: () => Promise<any>, label: string, attempts = 3): Promise<void> {
+    for (let i = 1; i <= attempts; i++) {
+      try {
+        await fn();
+        return;
+      } catch (err) {
+        this.logger.error(`Attempt ${i}/${attempts} failed for [${label}]: ${err.message}`);
+        if (i < attempts) await new Promise((r) => setTimeout(r, 500 * i));
+      }
+    }
+    this.logger.error(`All ${attempts} attempts failed for [${label}] — manual intervention required`);
+  }
+
   private generateConfirmationCode(): string {
-    return Math.random().toString(36).substring(2, 10).toUpperCase();
+    return randomBytes(5).toString('hex').toUpperCase();
   }
 
   private getAppName(): string {
@@ -171,16 +184,18 @@ export class ReservationService implements OnModuleInit {
     await reservation.save();
 
     // If guests > 4, payment is required
+    const DEPOSIT_AUD = 30;
     if (reservation.guests > 4) {
       const session = await this.paymentsService.createCheckoutSession(
         reservation._id.toString(),
-        30, // 30 AUD
+        DEPOSIT_AUD,
         reservation.email,
       );
 
       reservation.paymentStatus = PaymentStatus.PENDING;
       reservation.status = ReservationStatus.PAYMENT_PENDING;
       reservation.stripeSessionId = session.id;
+      reservation.paymentAmount = DEPOSIT_AUD;
       await reservation.save();
 
       return {
@@ -191,16 +206,20 @@ export class ReservationService implements OnModuleInit {
     }
 
     if (reservation.email) {
-      const template = reservationEmailTemplates.confirmationCode(
-        reservation.name,
-        reservation.confirmationCode,
-        this.getAppName(),
-      );
-      await this.emailService.sendEmail({
-        to: reservation.email,
-        subject: template.subject,
-        html: template.html,
-      });
+      try {
+        const template = reservationEmailTemplates.confirmationCode(
+          reservation.name,
+          reservation.confirmationCode,
+          this.getAppName(),
+        );
+        await this.emailService.sendEmail({
+          to: reservation.email,
+          subject: template.subject,
+          html: template.html,
+        });
+      } catch (emailError) {
+        this.logger.warn(`Failed to send confirmation code email to ${reservation.email}: ${emailError.message}`);
+      }
     }
 
     await this.notifyAdminsExpo(
@@ -220,22 +239,25 @@ export class ReservationService implements OnModuleInit {
 
   //! Confirm a reservation
   async confirmReservation(confirmationCode: string): Promise<Reservation> {
-    const reservation = await this.reservationModel.findOne({
-      status: ReservationStatus.PENDING,
-      confirmationCode,
-    });
+    // Find by code regardless of status so we can give accurate error messages
+    const reservation = await this.reservationModel.findOne({ confirmationCode });
 
     if (!reservation) {
       throw new ConflictException('Invalid confirmation code');
     }
 
-    if (
-      reservation.guests > 4 &&
-      reservation.paymentStatus !== PaymentStatus.COMPLETED
-    ) {
-      throw new ConflictException(
-        'Deposit payment required before confirming reservation',
-      );
+    // Block confirmation while deposit payment is outstanding (check first, before status gate)
+    if (reservation.status === ReservationStatus.PAYMENT_PENDING) {
+      throw new ConflictException('Deposit payment required before confirming reservation');
+    }
+
+    if (reservation.status !== ReservationStatus.PENDING) {
+      throw new ConflictException('Reservation is not pending');
+    }
+
+    // Extra safety: guests > 4 must have completed payment
+    if (reservation.guests > 4 && reservation.paymentStatus !== PaymentStatus.COMPLETED) {
+      throw new ConflictException('Deposit payment required before confirming reservation');
     }
 
     // Time restriction: confirmation must be within 1 hour of creation
@@ -251,30 +273,29 @@ export class ReservationService implements OnModuleInit {
       }
     }
 
-    if (reservation.status !== ReservationStatus.PENDING) {
-      throw new ConflictException('Reservation is not pending');
-    }
-
     reservation.status = ReservationStatus.CONFIRMED;
 
     await reservation.save();
 
     // Send confirmation email to user with reservation details
     if (reservation.email) {
-      const template = reservationEmailTemplates.confirmed(
-        reservation.name,
-        reservation.reservationDate
-          ? new Date(reservation.reservationDate).toLocaleDateString()
-          : 'N/A',
-        reservation.reservationTime || 'N/A',
-        this.getAppName(),
-      );
-
-      await this.emailService.sendEmail({
-        to: reservation.email,
-        subject: template.subject,
-        html: template.html,
-      });
+      try {
+        const template = reservationEmailTemplates.confirmed(
+          reservation.name,
+          reservation.reservationDate
+            ? new Date(reservation.reservationDate).toLocaleDateString()
+            : 'N/A',
+          reservation.reservationTime || 'N/A',
+          this.getAppName(),
+        );
+        await this.emailService.sendEmail({
+          to: reservation.email,
+          subject: template.subject,
+          html: template.html,
+        });
+      } catch (emailError) {
+        this.logger.warn(`Failed to send confirmed email to ${reservation.email}: ${emailError.message}`);
+      }
     }
 
     // Notify all admins
@@ -290,14 +311,16 @@ export class ReservationService implements OnModuleInit {
     return reservation;
   }
 
-  //! Get all reservations
+  //! Get all reservations (paginated)
   async getReservations(
     userId?: Types.ObjectId,
     status?: ReservationStatus,
     startDate?: string,
     endDate?: string,
     search?: string,
-  ): Promise<Reservation[]> {
+    page = 1,
+    limit = 50,
+  ): Promise<{ data: Reservation[]; total: number; pages: number; page: number }> {
     const filter: any = {};
     if (userId) filter.userId = userId;
     if (status) filter.status = status;
@@ -305,11 +328,9 @@ export class ReservationService implements OnModuleInit {
       const start = new Date(startDate);
       const end = new Date(endDate);
       end.setUTCHours(23, 59, 59, 999);
-
       filter.reservationDate = { $gte: start, $lte: end };
     } else if (startDate) {
-      const start = new Date(startDate);
-      filter.reservationDate = { $gte: start };
+      filter.reservationDate = { $gte: new Date(startDate) };
     } else if (endDate) {
       const end = new Date(endDate);
       end.setUTCHours(23, 59, 59, 999);
@@ -317,21 +338,24 @@ export class ReservationService implements OnModuleInit {
     }
 
     if (search) {
+      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       filter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-        { reservationId: { $regex: search, $options: 'i' } },
+        { name: { $regex: escapedSearch, $options: 'i' } },
+        { email: { $regex: escapedSearch, $options: 'i' } },
+        { reservationId: { $regex: escapedSearch, $options: 'i' } },
       ];
     }
 
-    console.log('Filter:', filter);
+    const safePage = Math.max(1, page);
+    const safeLimit = Math.min(Math.max(1, limit), 100);
+    const skip = (safePage - 1) * safeLimit;
 
-    const res = await this.reservationModel
-      .find(filter)
-      .sort({ reservationDate: -1 })
-      .exec();
+    const [data, total] = await Promise.all([
+      this.reservationModel.find(filter).sort({ reservationDate: -1 }).skip(skip).limit(safeLimit).exec(),
+      this.reservationModel.countDocuments(filter),
+    ]);
 
-    return res;
+    return { data, total, pages: Math.ceil(total / safeLimit), page: safePage };
   }
 
   //! Approve a reservation
@@ -448,20 +472,33 @@ export class ReservationService implements OnModuleInit {
   async handlePaymentSuccess(
     reservationId: string,
     stripeSessionId: string,
+    amountTotal: number,
   ): Promise<Reservation> {
-    const reservation = await this.reservationModel.findByIdAndUpdate(
-      reservationId,
-      {
-        paymentStatus: PaymentStatus.COMPLETED,
-        status: ReservationStatus.PENDING,
-        stripeSessionId,
-      },
-      { new: true },
-    );
+    const reservation = await this.reservationModel.findById(reservationId);
 
     if (!reservation) {
       throw new Error(`Reservation ${reservationId} not found`);
     }
+
+    // Idempotency: skip if already processed
+    if (reservation.paymentStatus === PaymentStatus.COMPLETED) {
+      this.logger.warn(`Duplicate webhook for reservation ${reservationId} (session ${stripeSessionId}) — already processed`);
+      return reservation;
+    }
+
+    // Amount verification: Stripe uses cents
+    const expectedCents = Math.round(reservation.paymentAmount * 100);
+    if (amountTotal !== expectedCents) {
+      this.logger.error(
+        `Payment amount mismatch for reservation ${reservationId}: expected ${expectedCents} cents, got ${amountTotal} cents`,
+      );
+      throw new Error(`Payment amount mismatch for reservation ${reservationId}`);
+    }
+
+    reservation.paymentStatus = PaymentStatus.COMPLETED;
+    reservation.status = ReservationStatus.PENDING;
+    reservation.stripeSessionId = stripeSessionId;
+    await reservation.save();
 
     this.logger.log(`Reservation ${reservationId} marked as paid. Status is now PENDING.`);
 

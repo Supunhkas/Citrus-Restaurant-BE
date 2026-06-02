@@ -124,21 +124,21 @@ export class DashboardService {
         `Fetching today's reservations from ${startOfDay} to ${endOfDay}`,
       );
 
+      // Use reservationDate (not createdAt) — we want reservations FOR today, not booked today
       const [reservations, statusCounts] = await Promise.all([
         this.reservationModel
           .find({
-            createdAt: { $gte: startOfDay, $lte: endOfDay },
+            reservationDate: { $gte: startOfDay, $lte: endOfDay },
           })
           .sort({ reservationTime: 1 })
           .populate('userId', 'name email')
           .lean()
           .exec(),
 
-        // Get status breakdown for today
         this.reservationModel.aggregate([
           {
             $match: {
-              createdAt: { $gte: startOfDay, $lte: endOfDay },
+              reservationDate: { $gte: startOfDay, $lte: endOfDay },
             },
           },
           {
@@ -182,89 +182,57 @@ export class DashboardService {
       const { startDate: startOfWeek, endDate: endOfWeek } =
         this.getWeekDateRange();
 
-      this.logger.log(
-        `Fetching weekly stats from ${startOfWeek} to ${endOfWeek}`,
-      );
+      this.logger.log(`Fetching weekly stats from ${startOfWeek} to ${endOfWeek}`);
 
-      // Get current week data
-      const [currentWeekReservations, previousWeekReservations] =
-        await Promise.all([
-          this.reservationModel
-            .find({
-              createdAt: { $gte: startOfWeek, $lte: endOfWeek },
-            })
-            .select('createdAt')
-            .lean()
-            .exec(),
+      const prevWeekStart = new Date(startOfWeek.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-          // Get previous week for trend comparison
-          this.reservationModel
-            .find({
-              createdAt: {
-                $gte: new Date(startOfWeek.getTime() - 7 * 24 * 60 * 60 * 1000),
-                $lt: startOfWeek,
-              },
-            })
-            .select('createdAt')
-            .lean()
-            .exec(),
-        ]);
+      // Use aggregation to count by day-of-week on reservationDate — no in-memory iteration
+      const [dailyAgg, previousWeekTotal] = await Promise.all([
+        this.reservationModel.aggregate([
+          {
+            $match: { reservationDate: { $gte: startOfWeek, $lte: endOfWeek } },
+          },
+          {
+            $group: {
+              // $dayOfWeek: 1=Sun, 2=Mon … 7=Sat; convert to JS 0-based by subtracting 1
+              _id: { $subtract: [{ $dayOfWeek: '$reservationDate' }, 1] },
+              count: { $sum: 1 },
+            },
+          },
+        ]),
+        this.reservationModel.countDocuments({
+          reservationDate: { $gte: prevWeekStart, $lt: startOfWeek },
+        }),
+      ]);
 
-      // Initialize daily stats and labels
+      const dayLabels = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
       const dailyStats = Array(7).fill(0);
-      const dayLabels = [
-        'Sunday',
-        'Monday',
-        'Tuesday',
-        'Wednesday',
-        'Thursday',
-        'Friday',
-        'Saturday',
-      ];
+      let totalWeekReservations = 0;
 
-      // Count reservations by day
-      currentWeekReservations.forEach((reservation: any) => {
-        const day = new Date(reservation.createdAt).getDay();
-        dailyStats[day]++;
+      dailyAgg.forEach(({ _id, count }) => {
+        if (_id >= 0 && _id <= 6) {
+          dailyStats[_id] = count;
+          totalWeekReservations += count;
+        }
       });
 
-      // Calculate metrics
-      const totalWeekReservations = currentWeekReservations.length;
       const averagePerDay = Math.round((totalWeekReservations / 7) * 100) / 100;
 
-      // Find peak day
       const maxCount = Math.max(...dailyStats);
-      const peakDayIndex = dailyStats.indexOf(maxCount);
       const peakDay = {
-        day: dayLabels[peakDayIndex],
+        day: dayLabels[dailyStats.indexOf(maxCount)],
         count: maxCount,
       };
 
-      // Calculate trend compared to previous week
-      const previousWeekTotal = previousWeekReservations.length;
       let trend: 'up' | 'down' | 'stable' = 'stable';
+      if (totalWeekReservations > previousWeekTotal * 1.05) trend = 'up';
+      else if (totalWeekReservations < previousWeekTotal * 0.95) trend = 'down';
 
-      if (totalWeekReservations > previousWeekTotal * 1.05) {
-        // 5% threshold
-        trend = 'up';
-      } else if (totalWeekReservations < previousWeekTotal * 0.95) {
-        trend = 'down';
-      }
+      this.logger.log(`Weekly stats: ${totalWeekReservations} reservations, trend: ${trend}`);
 
-      this.logger.log(
-        `Weekly stats calculated: ${totalWeekReservations} reservations, trend: ${trend}`,
-      );
-
-      return {
-        dailyStats,
-        dayLabels,
-        totalWeekReservations,
-        averagePerDay,
-        peakDay,
-        trend,
-      };
+      return { dailyStats, dayLabels, totalWeekReservations, averagePerDay, peakDay, trend };
     } catch (error) {
-      this.logger.error('Error fetching weekly stats', error.stack);
+      this.logger.error('Error fetching weekly stats', error.message);
       throw new Error('Failed to fetch weekly statistics');
     }
   }

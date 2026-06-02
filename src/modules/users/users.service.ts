@@ -3,17 +3,21 @@ import {
   ConflictException,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User, UserDocument } from '../../schema/user/user.schema';
 import { RegisterDto } from '../auth/dto/register.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import * as argon2 from 'argon2';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'crypto';
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     private readonly configService: ConfigService,
@@ -116,11 +120,17 @@ export class UsersService {
 
   async updateProfile(
     userId: string,
-    updateData: Partial<User>,
+    updateData: UpdateProfileDto,
   ): Promise<User> {
+    // Only allow safe fields — role, password, isActive, etc. are never updated here
+    const safeUpdate: Record<string, unknown> = {};
+    if (updateData.name !== undefined) safeUpdate.name = updateData.name;
+    if (updateData.phone !== undefined) safeUpdate.phone = updateData.phone;
+    if (updateData.address !== undefined) safeUpdate.address = updateData.address;
+
     const user = await this.userModel.findByIdAndUpdate(
       userId,
-      { $set: updateData },
+      { $set: safeUpdate },
       { new: true },
     );
 
@@ -167,34 +177,23 @@ export class UsersService {
     try {
       await this.userModel.findByIdAndUpdate(
         userId,
-        {
-          deviceToken,
-          deviceTokenUpdatedAt: new Date(),
-        },
+        { deviceToken, deviceTokenUpdatedAt: new Date() },
         { new: true },
       );
     } catch (error) {
-      console.error(
-        `Failed to update device token for user ${userId}`,
-        error.stack,
-      );
+      this.logger.error(`Failed to update device token for user ${userId}`, error.message);
     }
   }
+
   async updateFcmToken(userId: string, fcm: string): Promise<void> {
     try {
       await this.userModel.findByIdAndUpdate(
         userId,
-        {
-          fcmToken: fcm,
-          fcmTokenUpdatedAt: new Date(),
-        },
+        { fcmToken: fcm, fcmTokenUpdatedAt: new Date() },
         { new: true },
       );
     } catch (error) {
-      console.error(
-        `Failed to update Fcm token for user ${userId}`,
-        error.stack,
-      );
+      this.logger.error(`Failed to update FCM token for user ${userId}`, error.message);
     }
   }
 
@@ -202,17 +201,11 @@ export class UsersService {
     try {
       await this.userModel.findByIdAndUpdate(
         userId,
-        {
-          deviceToken: null,
-          deviceTokenUpdatedAt: null,
-        },
+        { deviceToken: null, deviceTokenUpdatedAt: null },
         { new: true },
       );
     } catch (error) {
-      console.error(
-        `Failed to remove device token for user ${userId}`,
-        error.stack,
-      );
+      this.logger.error(`Failed to remove device token for user ${userId}`, error.message);
     }
   }
 
@@ -232,6 +225,38 @@ export class UsersService {
       .exec();
 
     return admins.map((a) => a.deviceToken).filter(Boolean);
+  }
+
+  // ── Account lockout management ──────────────────────────────────────────
+
+  private readonly MAX_LOGIN_ATTEMPTS = 5;
+  private readonly LOCK_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+
+  async recordFailedLogin(userId: string): Promise<void> {
+    const user = await this.userModel.findById(userId);
+    if (!user) return;
+
+    const attempts = (user.failedLoginAttempts ?? 0) + 1;
+    const update: Record<string, unknown> = { failedLoginAttempts: attempts };
+
+    if (attempts >= this.MAX_LOGIN_ATTEMPTS) {
+      update.lockUntil = new Date(Date.now() + this.LOCK_DURATION_MS);
+      this.logger.warn(`Account locked due to ${attempts} failed attempts: ${user.email}`);
+    }
+
+    await this.userModel.findByIdAndUpdate(userId, update);
+  }
+
+  async clearFailedLogins(userId: string): Promise<void> {
+    await this.userModel.findByIdAndUpdate(userId, {
+      failedLoginAttempts: 0,
+      lockUntil: null,
+    });
+  }
+
+  isAccountLocked(user: User): boolean {
+    if (!user.lockUntil) return false;
+    return new Date(user.lockUntil) > new Date();
   }
 
   // ── Refresh token management ─────────────────────────────────────────────
