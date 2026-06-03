@@ -13,6 +13,7 @@ import {
   Reservation,
   ReservationDocument,
   ReservationStatus,
+  ReservationType,
 } from '../../schema/reservation/reservation.schema';
 import { EmailService } from '../email/email.service';
 import { UsersService } from '../users/users.service';
@@ -136,7 +137,7 @@ export class ReservationService implements OnModuleInit {
       );
     }
 
-    // 3. Capacity Check (Example: Max 40 guests per time slot)
+    // 4. Capacity Check (Max 40 guests per time slot)
     const MAX_CAPACITY = 40;
     const currentBookings = await this.reservationModel.aggregate([
       {
@@ -169,33 +170,47 @@ export class ReservationService implements OnModuleInit {
     }
 
     const confirmationCode = this.generateConfirmationCode();
-
-    // Generate reservationId
     const seq = await this.getNextSequence('reservationId');
     const reservationId = `RES-${seq.toString().padStart(6, '0')}`;
+    const reservationType = dto.type ?? ReservationType.STANDARD;
+
+    // Compute buffet pricing when applicable
+    const BUFFET_PRICE_PER_HEAD = Number(
+      this.configService.get<number>('reservation.buffetPricePerHead') ?? 35,
+    );
+    const pricePerPerson = reservationType === ReservationType.BUFFET ? BUFFET_PRICE_PER_HEAD : undefined;
+    const buffetTotal = pricePerPerson !== undefined ? dto.guests * pricePerPerson : undefined;
 
     const reservation = new this.reservationModel({
       ...dto,
       reservationId,
+      type: reservationType,
+      pricePerPerson,
+      buffetTotal,
       status: ReservationStatus.PENDING,
       notes: '',
       confirmationCode,
     });
     await reservation.save();
 
-    // If guests > 4, payment is required
+    // Buffet → always requires full pre-payment; standard → deposit for 5+ guests
     const DEPOSIT_AUD = 30;
-    if (reservation.guests > 4) {
+    const requiresPayment =
+      reservationType === ReservationType.BUFFET || reservation.guests > 4;
+    const paymentAmount =
+      reservationType === ReservationType.BUFFET ? (buffetTotal ?? DEPOSIT_AUD) : DEPOSIT_AUD;
+
+    if (requiresPayment) {
       const session = await this.paymentsService.createCheckoutSession(
         reservation._id.toString(),
-        DEPOSIT_AUD,
+        paymentAmount,
         reservation.email,
       );
 
       reservation.paymentStatus = PaymentStatus.PENDING;
       reservation.status = ReservationStatus.PAYMENT_PENDING;
       reservation.stripeSessionId = session.id;
-      reservation.paymentAmount = DEPOSIT_AUD;
+      reservation.paymentAmount = paymentAmount;
       await reservation.save();
 
       return {

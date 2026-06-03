@@ -48,6 +48,11 @@ export default () => ({
     name: process.env.APP_NAME || 'Citrus Restaurant',
     url: process.env.APP_URL || 'http://localhost:3000',
   },
+  reservation: {
+    buffetPricePerHead: parseInt(process.env.BUFFET_PRICE_PER_HEAD, 10) || 35,
+    depositThreshold: parseInt(process.env.RESERVATION_DEPOSIT_THRESHOLD, 10) || 4,
+    depositAmount: parseInt(process.env.RESERVATION_DEPOSIT_AMOUNT, 10) || 30,
+  },
   security: {
     helmet: {
       contentSecurityPolicy: {

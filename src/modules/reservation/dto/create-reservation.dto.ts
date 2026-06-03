@@ -4,9 +4,11 @@ import {
   IsOptional,
   IsEmail,
   IsNumber,
+  IsEnum,
   Min,
   Max,
 } from 'class-validator';
+import { ReservationType } from '../../../schema/reservation/reservation.schema';
 
 export class CreateReservationDto {
   @IsString()
@@ -39,4 +41,8 @@ export class CreateReservationDto {
 
   @IsNotEmpty()
   confirmationMethod: string;
+
+  @IsOptional()
+  @IsEnum(ReservationType)
+  type?: ReservationType;
 }

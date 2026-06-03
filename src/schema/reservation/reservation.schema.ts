@@ -16,6 +16,11 @@ export enum PaymentStatus {
   FAILED = 'FAILED',
 }
 
+export enum ReservationType {
+  STANDARD = 'STANDARD',
+  BUFFET = 'BUFFET',
+}
+
 export type ReservationDocument = Reservation & Document;
 
 @Schema({ timestamps: true })
@@ -81,6 +86,19 @@ export class Reservation {
 
   @Prop({ required: false, default: 0 })
   paymentAmount: number;
+
+  @Prop({
+    type: String,
+    enum: ReservationType,
+    default: ReservationType.STANDARD,
+  })
+  type: ReservationType;
+
+  @Prop({ required: false })
+  pricePerPerson?: number;
+
+  @Prop({ required: false })
+  buffetTotal?: number;
 }
 
 export const ReservationSchema = SchemaFactory.createForClass(Reservation);
