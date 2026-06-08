@@ -7,8 +7,6 @@ import {
   IsArray,
   IsIn,
   Min,
-  Max,
-  IsUrl,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 

@@ -182,9 +182,13 @@ export class DashboardService {
       const { startDate: startOfWeek, endDate: endOfWeek } =
         this.getWeekDateRange();
 
-      this.logger.log(`Fetching weekly stats from ${startOfWeek} to ${endOfWeek}`);
+      this.logger.log(
+        `Fetching weekly stats from ${startOfWeek} to ${endOfWeek}`,
+      );
 
-      const prevWeekStart = new Date(startOfWeek.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const prevWeekStart = new Date(
+        startOfWeek.getTime() - 7 * 24 * 60 * 60 * 1000,
+      );
 
       // Use aggregation to count by day-of-week on reservationDate — no in-memory iteration
       const [dailyAgg, previousWeekTotal] = await Promise.all([
@@ -205,7 +209,15 @@ export class DashboardService {
         }),
       ]);
 
-      const dayLabels = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const dayLabels = [
+        'Sunday',
+        'Monday',
+        'Tuesday',
+        'Wednesday',
+        'Thursday',
+        'Friday',
+        'Saturday',
+      ];
       const dailyStats = Array(7).fill(0);
       let totalWeekReservations = 0;
 
@@ -228,9 +240,18 @@ export class DashboardService {
       if (totalWeekReservations > previousWeekTotal * 1.05) trend = 'up';
       else if (totalWeekReservations < previousWeekTotal * 0.95) trend = 'down';
 
-      this.logger.log(`Weekly stats: ${totalWeekReservations} reservations, trend: ${trend}`);
+      this.logger.log(
+        `Weekly stats: ${totalWeekReservations} reservations, trend: ${trend}`,
+      );
 
-      return { dailyStats, dayLabels, totalWeekReservations, averagePerDay, peakDay, trend };
+      return {
+        dailyStats,
+        dayLabels,
+        totalWeekReservations,
+        averagePerDay,
+        peakDay,
+        trend,
+      };
     } catch (error) {
       this.logger.error('Error fetching weekly stats', error.message);
       throw new Error('Failed to fetch weekly statistics');

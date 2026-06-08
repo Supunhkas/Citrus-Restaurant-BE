@@ -6,6 +6,8 @@ import { EmailService } from '../email/email.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
+import { JwtPayload } from 'src/common/interfaces/auth.interfaces';
+import { UserDocument } from 'src/schema/user/user.schema';
 
 @Injectable()
 export class AuthService {
@@ -30,7 +32,8 @@ export class AuthService {
     }
 
     return {
-      message: 'Registration successful. Please check your email to verify your account before logging in.',
+      message:
+        'Registration successful. Please check your email to verify your account before logging in.',
     };
   }
 
@@ -57,21 +60,24 @@ export class AuthService {
     }
 
     // Update last login
-    await this.usersService.updateLastLogin((user as any)._id);
+    await this.usersService.updateLastLogin(user._id.toString());
 
     if (deviceToken) {
-      await this.usersService.updateDeviceToken((user as any)._id, deviceToken);
+      await this.usersService.updateDeviceToken(
+        user._id.toString(),
+        deviceToken,
+      );
       this.logger.log(`Device token saved for user: ${email}`);
     }
 
     if (fcmToken) {
-      await this.usersService.updateFcmToken((user as any)._id, fcmToken);
+      await this.usersService.updateFcmToken(user._id.toString(), fcmToken);
       this.logger.log(`FCM token saved for user: ${email}`);
     }
 
     const tokens = await this.generateTokens(user);
     const response = new AuthResponseDto({
-      id: (user as any)._id,
+      id: user._id.toString(),
       email: user.email,
       name: user.name,
       role: user.role,
@@ -91,11 +97,15 @@ export class AuthService {
     }
 
     if (!user.isEmailVerified) {
-      throw new UnauthorizedException('Please verify your email address before logging in');
+      throw new UnauthorizedException(
+        'Please verify your email address before logging in',
+      );
     }
 
     if (this.usersService.isAccountLocked(user)) {
-      throw new UnauthorizedException('Account temporarily locked due to too many failed login attempts. Please try again later.');
+      throw new UnauthorizedException(
+        'Account temporarily locked due to too many failed login attempts. Please try again later.',
+      );
     }
 
     const isPasswordValid = await this.usersService.verifyPassword(
@@ -103,20 +113,20 @@ export class AuthService {
       user.password,
     );
     if (!isPasswordValid) {
-      await this.usersService.recordFailedLogin((user as any)._id.toString());
+      await this.usersService.recordFailedLogin(user._id.toString());
       throw new UnauthorizedException('Invalid credentials');
     }
 
     // Clear lockout on successful login
-    await this.usersService.clearFailedLogins((user as any)._id.toString());
+    await this.usersService.clearFailedLogins(user._id.toString());
 
     // Update last login
-    await this.usersService.updateLastLogin((user as any)._id);
+    await this.usersService.updateLastLogin(user._id.toString());
 
     const tokens = await this.generateTokens(user);
 
     return new AuthResponseDto({
-      id: (user as any)._id,
+      id: user._id.toString(),
       email: user.email,
       name: user.name,
       role: user.role,
@@ -129,7 +139,7 @@ export class AuthService {
   async refreshToken(refreshToken: string): Promise<AuthResponseDto> {
     // 1. Verify the JWT signature and expiry using the dedicated refresh secret.
     //    This immediately rejects any access token presented here (different secret).
-    let payload: any;
+    let payload: JwtPayload;
     try {
       payload = await this.jwtService.verifyAsync(refreshToken, {
         secret: this.configService.get<string>('jwt.refreshSecret'),
@@ -160,12 +170,12 @@ export class AuthService {
     // 4. Rotate: issue a brand-new pair and overwrite the stored hash.
     const tokens = await this.generateTokens(user);
     await this.usersService.saveRefreshToken(
-      (user as any)._id.toString(),
+      user._id.toString(),
       tokens.refreshToken,
     );
 
     return new AuthResponseDto({
-      id: (user as any)._id,
+      id: user._id.toString(),
       email: user.email,
       name: user.name,
       role: user.role,
@@ -211,10 +221,10 @@ export class AuthService {
   }
 
   private async generateTokens(
-    user: any,
+    user: UserDocument,
   ): Promise<{ accessToken: string; refreshToken: string }> {
     const basePayload = {
-      sub: (user as any)._id,
+      sub: user._id.toString(),
       email: user.email,
       role: user.role,
     };

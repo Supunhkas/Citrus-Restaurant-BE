@@ -1,4 +1,10 @@
-import { Injectable, Logger, OnModuleInit, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  BadRequestException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import {
@@ -33,25 +39,46 @@ export class OrdersService implements OnModuleInit {
   onModuleInit() {
     this.eventBusService.on(
       'order.payment.success',
-      ({ orderId, stripeSessionId, amountTotal }: { orderId: string; stripeSessionId: string; amountTotal: number }) => {
+      ({
+        orderId,
+        stripeSessionId,
+        amountTotal,
+      }: {
+        orderId: string;
+        stripeSessionId: string;
+        amountTotal: number;
+      }) => {
         this.handlePaymentSuccess(orderId, stripeSessionId, amountTotal);
       },
     );
   }
 
-  async createPickupOrder(dto: CreatePickupOrderDto): Promise<any> {
+  async createPickupOrder(
+    dto: CreatePickupOrderDto,
+  ): Promise<
+    { paymentRequired: boolean; stripeSessionUrl?: string } & Record<
+      string,
+      unknown
+    >
+  > {
     // Re-fetch menu prices server-side to prevent client-supplied price manipulation
     const TAX_RATE = 0.1; // 10% GST — keep in sync with frontend
     let verifiedSubtotal = 0;
 
     const verifiedItems = await Promise.all(
       dto.items.map(async (item) => {
-        const menuItem = await this.menuService.getMenuItemById(item.menuItemId);
+        const menuItem = await this.menuService.getMenuItemById(
+          item.menuItemId,
+        );
         if (!menuItem) {
-          throw new BadRequestException(`Menu item not found: ${item.menuItemId}`);
+          throw new BadRequestException(
+            `Menu item not found: ${item.menuItemId}`,
+          );
         }
         if (!menuItem.isAvailable) {
-          throw new BadRequestException(`Menu item is no longer available: ${menuItem.name}`);
+          throw new BadRequestException(
+            `Menu item is no longer available: ${menuItem.name}`,
+          );
         }
         verifiedSubtotal += menuItem.price * item.quantity;
         return {
@@ -64,7 +91,8 @@ export class OrdersService implements OnModuleInit {
     );
 
     const verifiedTax = Math.round(verifiedSubtotal * TAX_RATE * 100) / 100;
-    const verifiedTotal = Math.round((verifiedSubtotal + verifiedTax) * 100) / 100;
+    const verifiedTotal =
+      Math.round((verifiedSubtotal + verifiedTax) * 100) / 100;
 
     // Save order initially with payment_pending status
     const order = new this.orderModel({
@@ -83,43 +111,42 @@ export class OrdersService implements OnModuleInit {
       `Pickup order created (payment pending): ${saved.customerName} — $${saved.total.toFixed(2)}`,
     );
 
-    // Try to create a Stripe checkout session
-    if (this.paymentsService.isInitialized) {
-      try {
-        const session = await this.paymentsService.createPickupOrderCheckoutSession(
-          (saved._id as any).toString(),
+    // Payment is mandatory — reject if Stripe is not configured
+    if (!this.paymentsService.isInitialized) {
+      await this.orderModel.findByIdAndDelete(saved._id);
+      throw new ServiceUnavailableException(
+        'Online payment is currently unavailable. Please try again later.',
+      );
+    }
+
+    try {
+      const session =
+        await this.paymentsService.createPickupOrderCheckoutSession(
+          saved._id.toString(),
           saved.total,
           dto.customerEmail || undefined,
         );
 
-        return {
-          ...saved.toObject(),
-          paymentRequired: true,
-          stripeSessionUrl: session.url,
-        };
-      } catch (err) {
-        this.logger.error(`Stripe session creation failed: ${err.message}`);
-        // Fall through to graceful degradation below
-      }
-    } else {
-      this.logger.warn('Stripe not configured — falling back to direct order (no payment).');
+      return {
+        ...saved.toObject(),
+        paymentRequired: true,
+        stripeSessionUrl: session.url,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Stripe session creation failed: ${message}`);
+      await this.orderModel.findByIdAndDelete(saved._id);
+      throw new ServiceUnavailableException(
+        'Could not initiate payment. Please try again.',
+      );
     }
-
-    // Graceful fallback: mark as pending without payment so the order still works
-    saved.status = PickupOrderStatus.PENDING;
-    saved.paymentStatus = PickupOrderPaymentStatus.NONE;
-    await saved.save();
-
-    this.notificationsGateway.notifyPickupOrder(saved);
-    await this.notifyAdminsExpo(saved);
-
-    return {
-      ...saved.toObject(),
-      paymentRequired: false,
-    };
   }
 
-  async handlePaymentSuccess(orderId: string, stripeSessionId: string, amountTotal: number): Promise<void> {
+  async handlePaymentSuccess(
+    orderId: string,
+    stripeSessionId: string,
+    amountTotal: number,
+  ): Promise<void> {
     const order = await this.orderModel.findById(orderId);
 
     if (!order) {
@@ -129,7 +156,9 @@ export class OrdersService implements OnModuleInit {
 
     // Idempotency: skip if already processed
     if (order.paymentStatus === PickupOrderPaymentStatus.COMPLETED) {
-      this.logger.warn(`Duplicate webhook for order ${orderId} (session ${stripeSessionId}) — already processed`);
+      this.logger.warn(
+        `Duplicate webhook for order ${orderId} (session ${stripeSessionId}) — already processed`,
+      );
       return;
     }
 
@@ -154,8 +183,13 @@ export class OrdersService implements OnModuleInit {
     await this.notifyAdminsExpo(order);
   }
 
-  async getOrderPaymentStatus(orderId: string): Promise<{ paid: boolean; status: string }> {
-    const order = await this.orderModel.findById(orderId).select('paymentStatus status').lean();
+  async getOrderPaymentStatus(
+    orderId: string,
+  ): Promise<{ paid: boolean; status: string }> {
+    const order = await this.orderModel
+      .findById(orderId)
+      .select('paymentStatus status')
+      .lean();
     if (!order) return { paid: false, status: 'not_found' };
     return {
       paid: order.paymentStatus === PickupOrderPaymentStatus.COMPLETED,
@@ -167,23 +201,42 @@ export class OrdersService implements OnModuleInit {
     status?: PickupOrderStatus,
     page = 1,
     limit = 50,
-  ): Promise<{ data: PickupOrder[]; total: number; pages: number; page: number }> {
+  ): Promise<{
+    data: PickupOrder[];
+    total: number;
+    pages: number;
+    page: number;
+  }> {
     const filter = status ? { status } : {};
     const safePage = Math.max(1, page);
     const safeLimit = Math.min(Math.max(1, limit), 100);
     const skip = (safePage - 1) * safeLimit;
 
     const [data, total] = await Promise.all([
-      this.orderModel.find(filter).sort({ createdAt: -1 }).skip(skip).limit(safeLimit).lean().exec(),
+      this.orderModel
+        .find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(safeLimit)
+        .lean()
+        .exec(),
       this.orderModel.countDocuments(filter),
     ]);
 
     return { data, total, pages: Math.ceil(total / safeLimit), page: safePage };
   }
 
-  private static readonly VALID_TRANSITIONS: Partial<Record<PickupOrderStatus, PickupOrderStatus[]>> = {
-    [PickupOrderStatus.PENDING]: [PickupOrderStatus.CONFIRMED, PickupOrderStatus.CANCELLED],
-    [PickupOrderStatus.CONFIRMED]: [PickupOrderStatus.READY, PickupOrderStatus.CANCELLED],
+  private static readonly VALID_TRANSITIONS: Partial<
+    Record<PickupOrderStatus, PickupOrderStatus[]>
+  > = {
+    [PickupOrderStatus.PENDING]: [
+      PickupOrderStatus.CONFIRMED,
+      PickupOrderStatus.CANCELLED,
+    ],
+    [PickupOrderStatus.CONFIRMED]: [
+      PickupOrderStatus.READY,
+      PickupOrderStatus.CANCELLED,
+    ],
     [PickupOrderStatus.READY]: [PickupOrderStatus.COMPLETED],
     [PickupOrderStatus.COMPLETED]: [],
     [PickupOrderStatus.CANCELLED]: [],
@@ -213,7 +266,7 @@ export class OrdersService implements OnModuleInit {
 
       if (!tokens?.length) return;
 
-      const itemSummary = (order.items as any[])
+      const itemSummary = order.items
         .slice(0, 2)
         .map((i) => `${i.quantity}× ${i.name}`)
         .join(', ');

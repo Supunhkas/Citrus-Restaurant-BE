@@ -49,23 +49,37 @@ export class ReservationService implements OnModuleInit {
   onModuleInit() {
     this.eventBusService.on('payment.success', async (data) => {
       await this.withRetry(
-        () => this.handlePaymentSuccess(data.reservationId, data.stripeSessionId, data.amountTotal ?? 0),
+        () =>
+          this.handlePaymentSuccess(
+            data.reservationId,
+            data.stripeSessionId,
+            data.amountTotal ?? 0,
+          ),
         `payment.success for reservation ${data.reservationId}`,
       );
     });
   }
 
-  private async withRetry(fn: () => Promise<any>, label: string, attempts = 3): Promise<void> {
+  private async withRetry(
+    fn: () => Promise<any>,
+    label: string,
+    attempts = 3,
+  ): Promise<void> {
     for (let i = 1; i <= attempts; i++) {
       try {
         await fn();
         return;
       } catch (err) {
-        this.logger.error(`Attempt ${i}/${attempts} failed for [${label}]: ${err.message}`);
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger.error(
+          `Attempt ${i}/${attempts} failed for [${label}]: ${message}`,
+        );
         if (i < attempts) await new Promise((r) => setTimeout(r, 500 * i));
       }
     }
-    this.logger.error(`All ${attempts} attempts failed for [${label}] — manual intervention required`);
+    this.logger.error(
+      `All ${attempts} attempts failed for [${label}] — manual intervention required`,
+    );
   }
 
   private generateConfirmationCode(): string {
@@ -178,8 +192,12 @@ export class ReservationService implements OnModuleInit {
     const BUFFET_PRICE_PER_HEAD = Number(
       this.configService.get<number>('reservation.buffetPricePerHead') ?? 35,
     );
-    const pricePerPerson = reservationType === ReservationType.BUFFET ? BUFFET_PRICE_PER_HEAD : undefined;
-    const buffetTotal = pricePerPerson !== undefined ? dto.guests * pricePerPerson : undefined;
+    const pricePerPerson =
+      reservationType === ReservationType.BUFFET
+        ? BUFFET_PRICE_PER_HEAD
+        : undefined;
+    const buffetTotal =
+      pricePerPerson !== undefined ? dto.guests * pricePerPerson : undefined;
 
     const reservation = new this.reservationModel({
       ...dto,
@@ -193,12 +211,10 @@ export class ReservationService implements OnModuleInit {
     });
     await reservation.save();
 
-    // Buffet → always requires full pre-payment; standard → deposit for 5+ guests
+    // Both types require a $30 deposit for 5+ guests; under 5 guests no payment needed
     const DEPOSIT_AUD = 30;
-    const requiresPayment =
-      reservationType === ReservationType.BUFFET || reservation.guests > 4;
-    const paymentAmount =
-      reservationType === ReservationType.BUFFET ? (buffetTotal ?? DEPOSIT_AUD) : DEPOSIT_AUD;
+    const requiresPayment = reservation.guests > 4;
+    const paymentAmount = DEPOSIT_AUD;
 
     if (requiresPayment) {
       const session = await this.paymentsService.createCheckoutSession(
@@ -232,8 +248,10 @@ export class ReservationService implements OnModuleInit {
           subject: template.subject,
           html: template.html,
         });
-      } catch (emailError) {
-        this.logger.warn(`Failed to send confirmation code email to ${reservation.email}: ${emailError.message}`);
+      } catch (emailError: any) {
+        this.logger.warn(
+          `Failed to send confirmation code email to ${reservation.email}: ${emailError.message}`,
+        );
       }
     }
 
@@ -255,7 +273,9 @@ export class ReservationService implements OnModuleInit {
   //! Confirm a reservation
   async confirmReservation(confirmationCode: string): Promise<Reservation> {
     // Find by code regardless of status so we can give accurate error messages
-    const reservation = await this.reservationModel.findOne({ confirmationCode });
+    const reservation = await this.reservationModel.findOne({
+      confirmationCode,
+    });
 
     if (!reservation) {
       throw new ConflictException('Invalid confirmation code');
@@ -263,7 +283,9 @@ export class ReservationService implements OnModuleInit {
 
     // Block confirmation while deposit payment is outstanding (check first, before status gate)
     if (reservation.status === ReservationStatus.PAYMENT_PENDING) {
-      throw new ConflictException('Deposit payment required before confirming reservation');
+      throw new ConflictException(
+        'Deposit payment required before confirming reservation',
+      );
     }
 
     if (reservation.status !== ReservationStatus.PENDING) {
@@ -271,8 +293,13 @@ export class ReservationService implements OnModuleInit {
     }
 
     // Extra safety: guests > 4 must have completed payment
-    if (reservation.guests > 4 && reservation.paymentStatus !== PaymentStatus.COMPLETED) {
-      throw new ConflictException('Deposit payment required before confirming reservation');
+    if (
+      reservation.guests > 4 &&
+      reservation.paymentStatus !== PaymentStatus.COMPLETED
+    ) {
+      throw new ConflictException(
+        'Deposit payment required before confirming reservation',
+      );
     }
 
     // Time restriction: confirmation must be within 1 hour of creation
@@ -308,8 +335,10 @@ export class ReservationService implements OnModuleInit {
           subject: template.subject,
           html: template.html,
         });
-      } catch (emailError) {
-        this.logger.warn(`Failed to send confirmed email to ${reservation.email}: ${emailError.message}`);
+      } catch (emailError: any) {
+        this.logger.warn(
+          `Failed to send confirmed email to ${reservation.email}: ${emailError.message}`,
+        );
       }
     }
 
@@ -335,7 +364,12 @@ export class ReservationService implements OnModuleInit {
     search?: string,
     page = 1,
     limit = 50,
-  ): Promise<{ data: Reservation[]; total: number; pages: number; page: number }> {
+  ): Promise<{
+    data: Reservation[];
+    total: number;
+    pages: number;
+    page: number;
+  }> {
     const filter: any = {};
     if (userId) filter.userId = userId;
     if (status) filter.status = status;
@@ -366,7 +400,12 @@ export class ReservationService implements OnModuleInit {
     const skip = (safePage - 1) * safeLimit;
 
     const [data, total] = await Promise.all([
-      this.reservationModel.find(filter).sort({ reservationDate: -1 }).skip(skip).limit(safeLimit).exec(),
+      this.reservationModel
+        .find(filter)
+        .sort({ reservationDate: -1 })
+        .skip(skip)
+        .limit(safeLimit)
+        .exec(),
       this.reservationModel.countDocuments(filter),
     ]);
 
@@ -497,7 +536,9 @@ export class ReservationService implements OnModuleInit {
 
     // Idempotency: skip if already processed
     if (reservation.paymentStatus === PaymentStatus.COMPLETED) {
-      this.logger.warn(`Duplicate webhook for reservation ${reservationId} (session ${stripeSessionId}) — already processed`);
+      this.logger.warn(
+        `Duplicate webhook for reservation ${reservationId} (session ${stripeSessionId}) — already processed`,
+      );
       return reservation;
     }
 
@@ -507,7 +548,9 @@ export class ReservationService implements OnModuleInit {
       this.logger.error(
         `Payment amount mismatch for reservation ${reservationId}: expected ${expectedCents} cents, got ${amountTotal} cents`,
       );
-      throw new Error(`Payment amount mismatch for reservation ${reservationId}`);
+      throw new Error(
+        `Payment amount mismatch for reservation ${reservationId}`,
+      );
     }
 
     reservation.paymentStatus = PaymentStatus.COMPLETED;
@@ -515,7 +558,9 @@ export class ReservationService implements OnModuleInit {
     reservation.stripeSessionId = stripeSessionId;
     await reservation.save();
 
-    this.logger.log(`Reservation ${reservationId} marked as paid. Status is now PENDING.`);
+    this.logger.log(
+      `Reservation ${reservationId} marked as paid. Status is now PENDING.`,
+    );
 
     // 1. Send confirmation email to user with confirmation code
     if (reservation.email) {

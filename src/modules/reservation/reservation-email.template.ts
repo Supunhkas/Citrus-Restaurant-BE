@@ -8,7 +8,11 @@ export const reservationEmailTemplates = {
   /**
    * Template for sending the initial confirmation code
    */
-  confirmationCode: (name: string, code: string, appName: string = DEFAULT_APP_NAME) => ({
+  confirmationCode: (
+    name: string,
+    code: string,
+    appName: string = DEFAULT_APP_NAME,
+  ) => ({
     subject: `Your Reservation Confirmation Code - ${appName}`,
     html: `
       <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
@@ -34,7 +38,12 @@ export const reservationEmailTemplates = {
   /**
    * Template for confirmed reservations (after user enters code)
    */
-  confirmed: (name: string, date: string, time: string, appName: string = DEFAULT_APP_NAME) => ({
+  confirmed: (
+    name: string,
+    date: string,
+    time: string,
+    appName: string = DEFAULT_APP_NAME,
+  ) => ({
     subject: `Your Reservation is Confirmed - ${appName}`,
     html: `
       <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
@@ -61,10 +70,16 @@ export const reservationEmailTemplates = {
   /**
    * Template for reservation updates (Approved/Rejected)
    */
-  update: (name: string, status: string, date: string, appName: string = DEFAULT_APP_NAME, reason?: string) => {
+  update: (
+    name: string,
+    status: string,
+    date: string,
+    appName: string = DEFAULT_APP_NAME,
+    reason?: string,
+  ) => {
     const isApproved = status.toUpperCase() === 'APPROVED';
     const bgColor = isApproved ? '#10b981' : '#ef4444';
-    
+
     return {
       subject: `Reservation ${status} - ${appName}`,
       html: `

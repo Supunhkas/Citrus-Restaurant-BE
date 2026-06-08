@@ -7,7 +7,6 @@ import {
   ValidateNested,
   IsNumber,
   Min,
-  IsPhoneNumber,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 

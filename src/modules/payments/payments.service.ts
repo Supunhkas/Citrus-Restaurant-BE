@@ -108,7 +108,10 @@ export class PaymentsService {
 
       return session;
     } catch (error) {
-      this.logger.error('Error creating Stripe session for pickup order:', error);
+      this.logger.error(
+        'Error creating Stripe session for pickup order:',
+        error,
+      );
       throw error;
     }
   }

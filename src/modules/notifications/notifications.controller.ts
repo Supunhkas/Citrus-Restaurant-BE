@@ -15,6 +15,10 @@ export class NotificationsController {
     @Body() body: { token: string; title: string; message: string },
   ) {
     const { token, title, message } = body;
-    return this.notificationsService.sendPushNotification(token, title, message);
+    return this.notificationsService.sendPushNotification(
+      token,
+      title,
+      message,
+    );
   }
 }

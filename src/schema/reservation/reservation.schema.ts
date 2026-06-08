@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { HydratedDocument, Types } from 'mongoose';
 
 export enum ReservationStatus {
   PENDING = 'PENDING',
@@ -21,7 +21,7 @@ export enum ReservationType {
   BUFFET = 'BUFFET',
 }
 
-export type ReservationDocument = Reservation & Document;
+export type ReservationDocument = HydratedDocument<Reservation>;
 
 @Schema({ timestamps: true })
 export class Reservation {

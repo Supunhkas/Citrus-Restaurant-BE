@@ -36,10 +36,11 @@ export class PaymentsController {
         req.rawBody,
       );
     } catch (err) {
-      this.logger.error(`Webhook Error: ${err.message}`);
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Webhook Error: ${message}`);
       return res
         .status(HttpStatus.BAD_REQUEST)
-        .send(`Webhook Error: ${err.message}`);
+        .send(`Webhook Error: ${message}`);
     }
 
     if (event.type === 'checkout.session.completed') {
@@ -48,21 +49,27 @@ export class PaymentsController {
       const amountTotal: number = session.amount_total ?? 0;
 
       if (orderId) {
-        this.logger.log(`Stripe payment completed for pickup order: ${orderId}`);
+        this.logger.log(
+          `Stripe payment completed for pickup order: ${orderId}`,
+        );
         this.eventBusService.emit('order.payment.success', {
           orderId,
           stripeSessionId: session.id,
           amountTotal,
         });
       } else if (reservationId) {
-        this.logger.log(`Stripe payment completed for reservation: ${reservationId}`);
+        this.logger.log(
+          `Stripe payment completed for reservation: ${reservationId}`,
+        );
         this.eventBusService.emit('payment.success', {
           reservationId,
           stripeSessionId: session.id,
           amountTotal,
         });
       } else {
-        this.logger.warn('Stripe webhook: no orderId or reservationId in metadata');
+        this.logger.warn(
+          'Stripe webhook: no orderId or reservationId in metadata',
+        );
       }
     }
 

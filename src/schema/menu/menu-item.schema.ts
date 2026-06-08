@@ -1,7 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { HydratedDocument } from 'mongoose';
 
-export type MenuItemDocument = MenuItem & Document;
+export type MenuItemDocument = HydratedDocument<MenuItem>;
 
 export type DietaryTag =
   | 'vegetarian'

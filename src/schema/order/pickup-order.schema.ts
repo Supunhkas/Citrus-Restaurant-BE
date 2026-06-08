@@ -1,7 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { HydratedDocument } from 'mongoose';
 
-export type PickupOrderDocument = PickupOrder & Document;
+export type PickupOrderDocument = HydratedDocument<PickupOrder>;
 
 export enum PickupOrderStatus {
   PAYMENT_PENDING = 'payment_pending',

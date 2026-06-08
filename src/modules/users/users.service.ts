@@ -46,11 +46,11 @@ export class UsersService {
     return user.save();
   }
 
-  async findByEmail(email: string): Promise<User | null> {
+  async findByEmail(email: string): Promise<UserDocument | null> {
     return this.userModel.findOne({ email: email.toLowerCase() }).exec();
   }
 
-  async findById(id: any): Promise<User | null> {
+  async findById(id: string): Promise<UserDocument | null> {
     const user = await this.userModel.findById(id).exec();
 
     if (!user) {
@@ -93,7 +93,7 @@ export class UsersService {
     const resetToken = randomBytes(32).toString('hex');
     const resetExpires = new Date(Date.now() + 3600000); // 1 hour
 
-    await this.userModel.findByIdAndUpdate((user as any)._id, {
+    await this.userModel.findByIdAndUpdate(user._id, {
       passwordResetToken: resetToken,
       passwordResetExpires: resetExpires,
     });
@@ -126,7 +126,8 @@ export class UsersService {
     const safeUpdate: Record<string, unknown> = {};
     if (updateData.name !== undefined) safeUpdate.name = updateData.name;
     if (updateData.phone !== undefined) safeUpdate.phone = updateData.phone;
-    if (updateData.address !== undefined) safeUpdate.address = updateData.address;
+    if (updateData.address !== undefined)
+      safeUpdate.address = updateData.address;
 
     const user = await this.userModel.findByIdAndUpdate(
       userId,
@@ -181,7 +182,10 @@ export class UsersService {
         { new: true },
       );
     } catch (error) {
-      this.logger.error(`Failed to update device token for user ${userId}`, error.message);
+      this.logger.error(
+        `Failed to update device token for user ${userId}`,
+        error.message,
+      );
     }
   }
 
@@ -193,7 +197,10 @@ export class UsersService {
         { new: true },
       );
     } catch (error) {
-      this.logger.error(`Failed to update FCM token for user ${userId}`, error.message);
+      this.logger.error(
+        `Failed to update FCM token for user ${userId}`,
+        error.message,
+      );
     }
   }
 
@@ -205,7 +212,10 @@ export class UsersService {
         { new: true },
       );
     } catch (error) {
-      this.logger.error(`Failed to remove device token for user ${userId}`, error.message);
+      this.logger.error(
+        `Failed to remove device token for user ${userId}`,
+        error.message,
+      );
     }
   }
 
@@ -241,7 +251,9 @@ export class UsersService {
 
     if (attempts >= this.MAX_LOGIN_ATTEMPTS) {
       update.lockUntil = new Date(Date.now() + this.LOCK_DURATION_MS);
-      this.logger.warn(`Account locked due to ${attempts} failed attempts: ${user.email}`);
+      this.logger.warn(
+        `Account locked due to ${attempts} failed attempts: ${user.email}`,
+      );
     }
 
     await this.userModel.findByIdAndUpdate(userId, update);
@@ -269,7 +281,7 @@ export class UsersService {
   async findByValidRefreshToken(
     userId: string,
     plainToken: string,
-  ): Promise<User | null> {
+  ): Promise<UserDocument | null> {
     const user = await this.userModel.findById(userId).exec();
     if (!user?.refreshTokenHash) return null;
 

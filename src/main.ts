@@ -3,7 +3,6 @@ import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
-import * as compression from 'compression';
 import { json, urlencoded } from 'express';
 
 function assertEnv(name: string, value: string | undefined): void {
@@ -47,9 +46,6 @@ async function bootstrap() {
 
   // CORS configuration
   app.enableCors(configService.get('cors'));
-
-  // Compression
-  // app.use(compression());
 
   // Request size limits (10MB) via built-in body parser
   app.use(json({ limit: '10mb' }));

@@ -18,6 +18,7 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { AuthThrottleGuard } from './guards/auth-throttle.guard';
 import { Public } from 'src/common/decorators/public.decorator';
+import { AuthenticatedUser } from 'src/common/interfaces/auth.interfaces';
 
 @Controller('auth')
 export class AuthController {
@@ -27,7 +28,9 @@ export class AuthController {
   @Post('register')
   @UseGuards(AuthThrottleGuard)
   @HttpCode(HttpStatus.CREATED)
-  async register(@Body() registerDto: RegisterDto): Promise<any> {
+  async register(
+    @Body() registerDto: RegisterDto,
+  ): Promise<{ message: string }> {
     return this.authService.register(registerDto);
   }
 
@@ -58,7 +61,9 @@ export class AuthController {
 
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  async logout(@CurrentUser() user: any): Promise<{ message: string }> {
+  async logout(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<{ message: string }> {
     return this.authService.logout(user.id);
   }
 
@@ -95,7 +100,9 @@ export class AuthController {
 
   @Get('profile')
   @HttpCode(HttpStatus.OK)
-  async getProfile(@CurrentUser() user: any): Promise<any> {
+  async getProfile(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<AuthenticatedUser> {
     return {
       id: user.id,
       email: user.email,

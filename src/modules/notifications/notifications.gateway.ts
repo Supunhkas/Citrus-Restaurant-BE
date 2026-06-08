@@ -9,10 +9,16 @@ import { Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { Server, Socket } from 'socket.io';
+import { JwtPayload } from 'src/common/interfaces/auth.interfaces';
+import { ReservationDocument } from 'src/schema/reservation/reservation.schema';
+import { PickupOrderDocument } from 'src/schema/order/pickup-order.schema';
 
 @WebSocketGateway({
   cors: {
-    origin: (origin: string, cb: (err: Error | null, allow?: boolean) => void) => {
+    origin: (
+      origin: string,
+      cb: (err: Error | null, allow?: boolean) => void,
+    ) => {
       // Allow connections with no origin (e.g. server-side / health checks)
       // Actual origin validation happens per-connection in afterInit middleware
       cb(null, true);
@@ -32,7 +38,8 @@ export class NotificationsGateway
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
   ) {
-    this.allowedOrigin = this.configService.get<string>('app.url') || 'http://localhost:3000';
+    this.allowedOrigin =
+      this.configService.get<string>('app.url') || 'http://localhost:3000';
   }
 
   afterInit(server: Server) {
@@ -43,7 +50,9 @@ export class NotificationsGateway
       // Enforce origin
       const origin = socket.handshake.headers.origin;
       if (origin && origin !== this.allowedOrigin) {
-        this.logger.warn(`WS connection rejected — disallowed origin: ${origin}`);
+        this.logger.warn(
+          `WS connection rejected — disallowed origin: ${origin}`,
+        );
         return next(new Error('Origin not allowed'));
       }
 
@@ -53,16 +62,24 @@ export class NotificationsGateway
         (socket.handshake.query?.token as string);
 
       if (!token) {
-        this.logger.warn(`WS connection rejected — no token provided (socket ${socket.id})`);
+        this.logger.warn(
+          `WS connection rejected — no token provided (socket ${socket.id})`,
+        );
         return next(new Error('Unauthorized'));
       }
 
       try {
-        const payload = this.jwtService.verify(token) as any;
-        socket.data.user = { id: payload.sub, email: payload.email, role: payload.role };
+        const payload = this.jwtService.verify(token) as JwtPayload;
+        socket.data.user = {
+          id: payload.sub,
+          email: payload.email,
+          role: payload.role,
+        };
         next();
       } catch {
-        this.logger.warn(`WS connection rejected — invalid token (socket ${socket.id})`);
+        this.logger.warn(
+          `WS connection rejected — invalid token (socket ${socket.id})`,
+        );
         return next(new Error('Unauthorized'));
       }
     });
@@ -74,7 +91,9 @@ export class NotificationsGateway
       client.join('admin-room');
       this.logger.log(`Admin connected: ${user.email} (${client.id})`);
     } else {
-      this.logger.log(`User connected: ${user?.email ?? 'unknown'} (${client.id})`);
+      this.logger.log(
+        `User connected: ${user?.email ?? 'unknown'} (${client.id})`,
+      );
     }
   }
 
@@ -84,17 +103,17 @@ export class NotificationsGateway
 
   // ── Reservation events (admin only) ──────────────────────────────────────
 
-  notifyNewReservation(reservation: any) {
+  notifyNewReservation(reservation: ReservationDocument) {
     this.server.to('admin-room').emit('reservationCreated', reservation);
   }
 
-  notifyReservationConfirmed(reservation: any) {
+  notifyReservationConfirmed(reservation: ReservationDocument) {
     this.server.to('admin-room').emit('reservationConfirmed', reservation);
   }
 
   // ── Pickup order events (admin only) ─────────────────────────────────────
 
-  notifyPickupOrder(order: any) {
+  notifyPickupOrder(order: PickupOrderDocument) {
     this.server.to('admin-room').emit('pickupOrderCreated', order);
   }
 }

@@ -24,7 +24,9 @@ export default () => ({
     origin:
       process.env.NODE_ENV === 'production'
         ? (process.env.ALLOWED_ORIGINS?.split(',') ?? [])
-        : (process.env.ALLOWED_ORIGINS?.split(',') ?? ['http://localhost:3000']),
+        : (process.env.ALLOWED_ORIGINS?.split(',') ?? [
+            'http://localhost:3000',
+          ]),
     credentials: true,
   },
   email: {
@@ -50,7 +52,8 @@ export default () => ({
   },
   reservation: {
     buffetPricePerHead: parseInt(process.env.BUFFET_PRICE_PER_HEAD, 10) || 35,
-    depositThreshold: parseInt(process.env.RESERVATION_DEPOSIT_THRESHOLD, 10) || 4,
+    depositThreshold:
+      parseInt(process.env.RESERVATION_DEPOSIT_THRESHOLD, 10) || 4,
     depositAmount: parseInt(process.env.RESERVATION_DEPOSIT_AMOUNT, 10) || 30,
   },
   security: {
