@@ -76,6 +76,10 @@ export class AuthService {
     }
 
     const tokens = await this.generateTokens(user);
+    await this.usersService.saveRefreshToken(
+      user._id.toString(),
+      tokens.refreshToken,
+    );
     const response = new AuthResponseDto({
       id: user._id.toString(),
       email: user.email,
@@ -124,6 +128,10 @@ export class AuthService {
     await this.usersService.updateLastLogin(user._id.toString());
 
     const tokens = await this.generateTokens(user);
+    await this.usersService.saveRefreshToken(
+      user._id.toString(),
+      tokens.refreshToken,
+    );
 
     return new AuthResponseDto({
       id: user._id.toString(),

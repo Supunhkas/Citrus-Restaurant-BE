@@ -9,6 +9,15 @@ export class UsersController {
 
   @Get('details')
   async getUserDetails(@CurrentUser() user: AuthenticatedUser) {
-    return await this.userService.findById(user.id);
+    const found = await this.userService.findById(user.id);
+    const {
+      password,
+      refreshTokenHash,
+      passwordResetToken,
+      passwordResetExpires,
+      emailVerificationToken,
+      ...safe
+    } = found.toObject();
+    return safe;
   }
 }

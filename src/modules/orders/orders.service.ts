@@ -48,7 +48,18 @@ export class OrdersService implements OnModuleInit {
         stripeSessionId: string;
         amountTotal: number;
       }) => {
-        this.handlePaymentSuccess(orderId, stripeSessionId, amountTotal);
+        // EventBusService is a plain EventEmitter — an unawaited rejection here
+        // becomes an unhandled promise rejection (process-fatal by default) and,
+        // since the webhook controller has already responded 200 to Stripe,
+        // would otherwise silently drop a confirmed payment with no retry.
+        this.handlePaymentSuccess(orderId, stripeSessionId, amountTotal).catch(
+          (error) => {
+            this.logger.error(
+              `Unhandled error processing payment success for order ${orderId}`,
+              error instanceof Error ? error.stack : String(error),
+            );
+          },
+        );
       },
     );
   }

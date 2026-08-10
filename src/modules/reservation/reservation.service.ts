@@ -156,7 +156,11 @@ export class ReservationService implements OnModuleInit {
     const currentBookings = await this.reservationModel.aggregate([
       {
         $match: {
-          reservationDate: dto.reservationDate,
+          // aggregate() sends $match straight to MongoDB with no schema casting
+          // (unlike find()/findOne()), so this must be a real Date, not the raw
+          // request string, or it will never match the stored BSON Date and this
+          // capacity check silently passes every time.
+          reservationDate: new Date(dto.reservationDate),
           reservationTime: dto.reservationTime,
           status: {
             $in: [
@@ -255,6 +259,11 @@ export class ReservationService implements OnModuleInit {
       }
     }
 
+    // The code is considered "issued" now, regardless of email outcome above —
+    // this is what confirmReservation's expiry window is measured against.
+    reservation.codeIssuedAt = new Date();
+    await reservation.save();
+
     await this.notifyAdminsExpo(
       'New Reservation',
       `Reservation on ${new Date(reservation.reservationDate).toLocaleDateString()} ${reservation.reservationTime}`,
@@ -302,13 +311,15 @@ export class ReservationService implements OnModuleInit {
       );
     }
 
-    // Time restriction: confirmation must be within 1 hour of creation
-    const createdAt = reservation.get('createdAt');
-    if (createdAt) {
-      const createdTime = new Date(createdAt).getTime();
+    // Time restriction: confirmation must be within 1 hour of the code being
+    // issued. Falls back to createdAt for records saved before codeIssuedAt
+    // existed, or in case it was somehow never set.
+    const codeIssuedAt = reservation.codeIssuedAt || reservation.get('createdAt');
+    if (codeIssuedAt) {
+      const issuedTime = new Date(codeIssuedAt).getTime();
       const now = Date.now();
       const oneHour = 60 * 60 * 1000;
-      if (now - createdTime > oneHour) {
+      if (now - issuedTime > oneHour) {
         throw new ConflictException(
           'Confirmation code expired. Please create a new reservation.',
         );
@@ -556,6 +567,9 @@ export class ReservationService implements OnModuleInit {
     reservation.paymentStatus = PaymentStatus.COMPLETED;
     reservation.status = ReservationStatus.PENDING;
     reservation.stripeSessionId = stripeSessionId;
+    // The confirmation code is only emailed once payment clears (below), so
+    // the confirmReservation expiry window starts now, not at creation time.
+    reservation.codeIssuedAt = new Date();
     await reservation.save();
 
     this.logger.log(

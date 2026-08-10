@@ -62,6 +62,13 @@ export class Reservation {
   @Prop({ required: true })
   confirmationCode: string;
 
+  // When the confirmation code was actually emailed to the guest. For deposit
+  // reservations the code isn't sent at creation time — only once the Stripe
+  // webhook confirms payment — so confirmReservation's expiry window must be
+  // measured from here, not from createdAt.
+  @Prop({ type: Date, default: null })
+  codeIssuedAt?: Date | null;
+
   @Prop()
   specialRequests?: string;
 
