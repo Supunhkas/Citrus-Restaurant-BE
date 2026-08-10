@@ -1,9 +1,10 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as admin from 'firebase-admin';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class FirebaseService implements OnModuleInit {
+  private readonly logger = new Logger(FirebaseService.name);
   private initialized = false;
 
   constructor(private readonly configService: ConfigService) {}
@@ -21,7 +22,7 @@ export class FirebaseService implements OnModuleInit {
         !firebaseConfig?.clientEmail ||
         !firebaseConfig?.privateKey
       ) {
-        console.error('Firebase configuration is incomplete');
+        this.logger.error('Firebase configuration is incomplete');
         throw new Error('Firebase configuration missing required fields');
       }
 
@@ -36,7 +37,7 @@ export class FirebaseService implements OnModuleInit {
         });
         this.initialized = true;
       } catch (error) {
-        console.error('Failed to initialize Firebase Admin', error);
+        this.logger.error('Failed to initialize Firebase Admin', error);
         throw error;
       }
     }
@@ -93,12 +94,12 @@ export class FirebaseService implements OnModuleInit {
         error.code === 'messaging/invalid-registration-token' ||
         error.code === 'messaging/registration-token-not-registered'
       ) {
-        console.warn(`Invalid or expired device token: ${deviceToken}`);
+        this.logger.warn(`Invalid or expired device token: ${deviceToken}`);
         // You should remove this token from your database
         return null;
       }
 
-      console.error(
+      this.logger.error(
         `Failed to send FCM notification: ${error.message}`,
         error.stack,
       );
@@ -117,7 +118,7 @@ export class FirebaseService implements OnModuleInit {
     data?: Record<string, string>,
   ) {
     if (!deviceTokens || deviceTokens.length === 0) {
-      console.warn('No device tokens provided for multicast');
+      this.logger.warn('No device tokens provided for multicast');
       return { successCount: 0, failureCount: 0 };
     }
 
@@ -154,12 +155,12 @@ export class FirebaseService implements OnModuleInit {
         const failedTokens = response.responses
           .map((resp, idx) => (!resp.success ? deviceTokens[idx] : null))
           .filter(Boolean);
-        console.warn(`Failed tokens: ${failedTokens.join(', ')}`);
+        this.logger.warn(`Failed tokens: ${failedTokens.join(', ')}`);
       }
 
       return response;
     } catch (error) {
-      console.error('Failed to send multicast notification', error);
+      this.logger.error('Failed to send multicast notification', error);
       return { successCount: 0, failureCount: deviceTokens.length };
     }
   }

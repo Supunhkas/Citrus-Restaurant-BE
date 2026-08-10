@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { OrdersService } from './orders.service';
 import { CreatePickupOrderDto } from './dto/create-pickup-order.dto';
+import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { PickupOrderStatus } from '../../schema/order/pickup-order.schema';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -64,10 +65,7 @@ export class OrdersAdminController {
 
   // PATCH /orders/admin/:id/status
   @Patch(':id/status')
-  updateStatus(
-    @Param('id') id: string,
-    @Body('status') status: PickupOrderStatus,
-  ) {
-    return this.ordersService.updateOrderStatus(id, status);
+  updateStatus(@Param('id') id: string, @Body() dto: UpdateOrderStatusDto) {
+    return this.ordersService.updateOrderStatus(id, dto.status);
   }
 }

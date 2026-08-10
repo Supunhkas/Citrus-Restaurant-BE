@@ -93,7 +93,7 @@ export class AuthService {
     return response;
   }
   async login(loginDto: LoginDto): Promise<AuthResponseDto> {
-    const { email, password } = loginDto;
+    const { email, password, deviceToken, fcmToken } = loginDto;
 
     const user = await this.usersService.findByEmail(email);
 
@@ -130,6 +130,17 @@ export class AuthService {
 
     // Update last login
     await this.usersService.updateLastLogin(user._id.toString());
+
+    if (deviceToken) {
+      await this.usersService.updateDeviceToken(
+        user._id.toString(),
+        deviceToken,
+      );
+    }
+
+    if (fcmToken) {
+      await this.usersService.updateFcmToken(user._id.toString(), fcmToken);
+    }
 
     const tokens = await this.generateTokens(user);
     await this.usersService.saveRefreshToken(

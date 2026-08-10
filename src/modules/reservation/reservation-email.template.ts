@@ -4,6 +4,15 @@
 
 const DEFAULT_APP_NAME = 'Citrus Restaurant';
 
+function escapeHtml(value: string): string {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export const reservationEmailTemplates = {
   /**
    * Template for sending the initial confirmation code
@@ -21,7 +30,7 @@ export const reservationEmailTemplates = {
         </div>
         <div style="padding: 32px; color: #333; line-height: 1.6;">
           <h2 style="color: #111; margin-top: 0;">Reservation Confirmation</h2>
-          <p>Dear ${name || 'Guest'},</p>
+          <p>Dear ${escapeHtml(name || 'Guest')},</p>
           <p>Thank you for choosing ${appName}. To complete your reservation, please use the confirmation code below:</p>
           <div style="background-color: #fff7ed; border: 2px dashed #fb923c; border-radius: 6px; padding: 16px; text-align: center; margin: 24px 0;">
             <span style="font-size: 32px; font-weight: bold; letter-spacing: 4px; color: #ea580c;">${code}</span>
@@ -52,11 +61,11 @@ export const reservationEmailTemplates = {
         </div>
         <div style="padding: 32px; color: #333; line-height: 1.6;">
           <h2 style="color: #111; margin-top: 0;">Reservation Confirmed!</h2>
-          <p>Dear ${name || 'Guest'},</p>
+          <p>Dear ${escapeHtml(name || 'Guest')},</p>
           <p>We are happy to inform you that your reservation has been successfully confirmed.</p>
           <div style="background-color: #f0fdf4; border-radius: 6px; padding: 20px; margin: 24px 0;">
             <p style="margin: 0; margin-bottom: 8px;"><strong>Date:</strong> ${date}</p>
-            <p style="margin: 0;"><strong>Time:</strong> ${time}</p>
+            <p style="margin: 0;"><strong>Time:</strong> ${escapeHtml(time)}</p>
           </div>
           <p>We look forward to serving you!</p>
         </div>
@@ -89,9 +98,9 @@ export const reservationEmailTemplates = {
           </div>
           <div style="padding: 32px; color: #333; line-height: 1.6;">
             <h2 style="color: #111; margin-top: 0;">Reservation ${status}</h2>
-            <p>Dear ${name},</p>
+            <p>Dear ${escapeHtml(name)},</p>
             <p>Your reservation on <strong>${date}</strong> has been <strong>${status}</strong>.</p>
-            ${reason ? `<div style="background-color: #fff1f2; border-left: 4px solid #ef4444; padding: 12px; margin: 16px 0;"><strong>Reason:</strong> ${reason}</div>` : ''}
+            ${reason ? `<div style="background-color: #fff1f2; border-left: 4px solid #ef4444; padding: 12px; margin: 16px 0;"><strong>Reason:</strong> ${escapeHtml(reason)}</div>` : ''}
             <p>If you have any questions, please feel free to contact us.</p>
           </div>
           <div style="background-color: #f8f9fa; padding: 16px; text-align: center; color: #888; font-size: 12px; border-top: 1px solid #e0e0e0;">

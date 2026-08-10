@@ -114,7 +114,12 @@ ReservationSchema.index({ tableNumber: 1, reservationDate: 1, status: 1 });
 // Capacity check aggregation (hot path on every createReservation)
 ReservationSchema.index({ reservationDate: 1, reservationTime: 1, status: 1 });
 // Duplicate booking guard
-ReservationSchema.index({ email: 1, status: 1 });
+ReservationSchema.index({
+  email: 1,
+  reservationDate: 1,
+  reservationTime: 1,
+  status: 1,
+});
 // Confirmation lookup
 ReservationSchema.index({ confirmationCode: 1, status: 1 });
 // Dashboard and list queries

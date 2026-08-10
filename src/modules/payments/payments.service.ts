@@ -11,6 +11,16 @@ export class PaymentsService {
     const secretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
 
     if (secretKey) {
+      // The installed `stripe` SDK's types only accept its latest known API
+      // version ('2026-04-22.dahlia') as a literal here — but the API
+      // version actually configured on the Stripe account/dashboard may
+      // still be '2024-06-20', and changing it changes response/webhook
+      // payload shapes (this is a real Stripe account setting, not just a
+      // type mismatch). Pinning to whatever the SDK types happen to accept,
+      // without reviewing the Stripe API changelog between the two
+      // versions, risks silently breaking session/webhook field shapes
+      // this codebase already depends on. Left as `as any` deliberately —
+      // upgrade only after a real changelog review.
       this.stripe = new Stripe(secretKey, {
         apiVersion: '2024-06-20' as any,
       });

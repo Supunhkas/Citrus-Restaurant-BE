@@ -4,6 +4,7 @@ import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
+import { MongoCastErrorFilter } from './common/filters/mongo-cast-error.filter';
 
 function assertEnv(name: string, value: string | undefined): void {
   if (!value || value.trim() === '') {
@@ -48,6 +49,11 @@ async function bootstrap() {
 
   // CORS configuration
   app.enableCors(configService.get('cors'));
+
+  // Malformed ObjectId route/query params (e.g. a bad :id) otherwise throw
+  // an uncaught Mongoose CastError, which Nest's default filter turns into
+  // an opaque 500 instead of a client error.
+  app.useGlobalFilters(new MongoCastErrorFilter());
 
   // Request size limits (10MB) via Nest's own body parser. Using app.useBodyParser
   // (instead of app.use(json()/urlencoded()) from the express package) matters here:

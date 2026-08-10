@@ -3,6 +3,7 @@ import {
   Injectable,
   ConflictException,
   BadRequestException,
+  NotFoundException,
   Logger,
   OnModuleInit,
 } from '@nestjs/common';
@@ -444,8 +445,10 @@ export class ReservationService implements OnModuleInit {
       ];
     }
 
-    const safePage = Math.max(1, page);
-    const safeLimit = Math.min(Math.max(1, limit), 100);
+    const safePage = Number.isFinite(page) ? Math.max(1, page) : 1;
+    const safeLimit = Number.isFinite(limit)
+      ? Math.min(Math.max(1, limit), 100)
+      : 50;
     const skip = (safePage - 1) * safeLimit;
 
     const [data, total] = await Promise.all([
@@ -465,7 +468,7 @@ export class ReservationService implements OnModuleInit {
   async approveReservation(reservationId: string): Promise<Reservation> {
     const reservation = await this.reservationModel.findById(reservationId);
     if (!reservation) {
-      throw new ConflictException('Reservation not found');
+      throw new NotFoundException('Reservation not found');
     }
     if (reservation.status !== ReservationStatus.CONFIRMED) {
       throw new ConflictException(
@@ -506,7 +509,7 @@ export class ReservationService implements OnModuleInit {
   ): Promise<Reservation> {
     const reservation = await this.reservationModel.findById(reservationId);
     if (!reservation) {
-      throw new ConflictException('Reservation not found');
+      throw new NotFoundException('Reservation not found');
     }
 
     if (reservation.status !== ReservationStatus.CONFIRMED) {
@@ -552,9 +555,9 @@ export class ReservationService implements OnModuleInit {
       status: ReservationStatus.PENDING,
     });
     if (!reservation) {
-      throw new ConflictException(
-        'No pending reservation found for this contact',
-      );
+      // Always return the same generic outcome whether or not a match was
+      // found, so callers can't enumerate contacts by probing this endpoint.
+      return;
     }
 
     if (reservation.email) {

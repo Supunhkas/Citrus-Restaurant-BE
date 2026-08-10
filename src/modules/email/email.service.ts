@@ -16,6 +16,15 @@ export interface EmailTemplate {
   text?: string;
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
@@ -206,9 +215,9 @@ export class EmailService {
         </div>
         <div style="padding: 20px;">
           <h2 style="color: #333;">Reservation Update</h2>
-          <p>Dear ${name},</p>
+          <p>Dear ${escapeHtml(name)},</p>
           <p>Your reservation on <b>${new Date(reservationDate).toLocaleString()}</b> has been <b>${status}</b>.</p>
-          ${reason ? `<p>Reason: ${reason}</p>` : ''}
+          ${reason ? `<p>Reason: ${escapeHtml(reason)}</p>` : ''}
           <p>If you have any questions, please contact us.</p>
         </div>
         <div style="background-color: #f8f9fa; padding: 20px; text-align: center; color: #666; font-size: 12px;">

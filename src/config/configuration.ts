@@ -56,6 +56,9 @@ export default () => ({
       parseInt(process.env.RESERVATION_DEPOSIT_THRESHOLD, 10) || 4,
     depositAmount: parseInt(process.env.RESERVATION_DEPOSIT_AMOUNT, 10) || 30,
   },
+  orders: {
+    taxRate: Number(process.env.ORDER_TAX_RATE) || 0.1,
+  },
   security: {
     helmet: {
       contentSecurityPolicy: {

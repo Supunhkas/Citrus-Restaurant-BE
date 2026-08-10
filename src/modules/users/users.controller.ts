@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, NotFoundException } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { AuthenticatedUser } from 'src/common/interfaces/auth.interfaces';
@@ -10,6 +10,9 @@ export class UsersController {
   @Get('details')
   async getUserDetails(@CurrentUser() user: AuthenticatedUser) {
     const found = await this.userService.findById(user.id);
+    if (!found) {
+      throw new NotFoundException('User not found');
+    }
     const {
       password,
       refreshTokenHash,

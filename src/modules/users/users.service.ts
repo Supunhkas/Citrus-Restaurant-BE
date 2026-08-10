@@ -2,7 +2,6 @@ import {
   Injectable,
   ConflictException,
   NotFoundException,
-  BadRequestException,
   Logger,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
@@ -12,7 +11,7 @@ import { RegisterDto } from '../auth/dto/register.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import * as argon2 from 'argon2';
 import { ConfigService } from '@nestjs/config';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHash } from 'crypto';
 
 @Injectable()
 export class UsersService {
@@ -34,16 +33,36 @@ export class UsersService {
 
     const hashedPassword = await this.hashPassword(password);
 
+    // The plain token is only ever returned to the caller (to email it) —
+    // only its hash is persisted, the same way refreshTokenHash already is.
+    // A raw DB read otherwise directly yields a usable verification token.
     const emailVerificationToken = randomBytes(32).toString('hex');
 
     const user = new this.userModel({
       email,
       password: hashedPassword,
       name,
-      emailVerificationToken,
+      emailVerificationToken: this.hashToken(emailVerificationToken),
     });
 
-    return user.save();
+    try {
+      await user.save();
+    } catch (error: any) {
+      // findByEmail-then-insert above is a check-then-act race against the
+      // schema's unique email index — two concurrent registrations for the
+      // same address can both pass that check, and the loser hits a raw
+      // Mongo E11000 here instead of a clean 409.
+      if (error?.code === 11000) {
+        throw new ConflictException('User with this email already exists');
+      }
+      throw error;
+    }
+
+    return { ...user.toObject(), emailVerificationToken } as User;
+  }
+
+  private hashToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
   }
 
   async findByEmail(email: string): Promise<UserDocument | null> {
@@ -51,13 +70,14 @@ export class UsersService {
   }
 
   async findById(id: string): Promise<UserDocument | null> {
-    const user = await this.userModel.findById(id).exec();
-
-    if (!user) {
-      throw new BadRequestException('User not found');
-    }
-
-    return user;
+    // Returns null on not-found, matching the declared type — this used to
+    // throw BadRequestException instead, which made JwtStrategy's own
+    // `if (!user) throw new UnauthorizedException(...)` unreachable: a
+    // valid JWT for a since-deleted user surfaced as a raw 400 from deep in
+    // the guard chain instead of the intended 401. Callers that need a 404
+    // (e.g. a controller looking up a user by id) should throw it
+    // themselves based on the null.
+    return this.userModel.findById(id).exec();
   }
 
   async updateLastLogin(userId: string): Promise<void> {
@@ -68,18 +88,20 @@ export class UsersService {
 
   async verifyEmail(token: string): Promise<User> {
     const user = await this.userModel.findOne({
-      emailVerificationToken: token,
+      emailVerificationToken: this.hashToken(token),
     });
 
     if (!user) {
       throw new NotFoundException('Invalid verification token');
     }
 
-    user.isEmailVerified = true;
-    user.emailVerificationToken = undefined;
+    // $unset, not a plain `undefined` field in the update object — Mongo
+    // drops keys with an undefined value rather than translating them to
+    // $unset, so the token was very likely never actually cleared from the
+    // stored document.
     return this.userModel.findByIdAndUpdate(
       user._id,
-      { isEmailVerified: true, emailVerificationToken: undefined },
+      { isEmailVerified: true, $unset: { emailVerificationToken: '' } },
       { new: true },
     );
   }
@@ -93,11 +115,13 @@ export class UsersService {
       return null;
     }
 
+    // As with emailVerificationToken, only the hash is persisted — the
+    // plain value returned here is what actually gets emailed.
     const resetToken = randomBytes(32).toString('hex');
     const resetExpires = new Date(Date.now() + 3600000); // 1 hour
 
     await this.userModel.findByIdAndUpdate(user._id, {
-      passwordResetToken: resetToken,
+      passwordResetToken: this.hashToken(resetToken),
       passwordResetExpires: resetExpires,
     });
 
@@ -106,7 +130,7 @@ export class UsersService {
 
   async resetPassword(token: string, newPassword: string): Promise<void> {
     const user = await this.userModel.findOne({
-      passwordResetToken: token,
+      passwordResetToken: this.hashToken(token),
       passwordResetExpires: { $gt: new Date() },
     });
 

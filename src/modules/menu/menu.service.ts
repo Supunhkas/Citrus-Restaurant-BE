@@ -59,6 +59,7 @@ export class MenuService {
     return this.menuItemModel
       .find(filter)
       .sort({ sortOrder: 1, createdAt: 1 })
+      .limit(500)
       .lean()
       .exec();
   }
@@ -114,6 +115,7 @@ export class MenuService {
     return this.menuCategoryModel
       .find({ isActive: true })
       .sort({ sortOrder: 1 })
+      .limit(500)
       .lean()
       .exec();
   }

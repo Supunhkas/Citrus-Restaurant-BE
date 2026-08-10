@@ -6,7 +6,6 @@ import {
   ReservationDocument,
   ReservationStatus,
 } from '../../schema/reservation/reservation.schema';
-import { UsersService } from '../users/users.service';
 
 export interface KpiData {
   total: number;
@@ -24,7 +23,7 @@ export interface WeeklyStats {
   dayLabels: string[];
   totalWeekReservations: number;
   averagePerDay: number;
-  peakDay: { day: string; count: number };
+  peakDay: { day: string | null; count: number };
   trend: 'up' | 'down' | 'stable';
 }
 
@@ -46,7 +45,6 @@ export class DashboardService {
   constructor(
     @InjectModel(Reservation.name)
     readonly reservationModel: Model<ReservationDocument>,
-    private readonly userService: UsersService,
   ) {}
 
   async getKpiData(): Promise<KpiData> {
@@ -240,7 +238,7 @@ export class DashboardService {
 
       const maxCount = Math.max(...dailyStats);
       const peakDay = {
-        day: dayLabels[dailyStats.indexOf(maxCount)],
+        day: maxCount > 0 ? dayLabels[dailyStats.indexOf(maxCount)] : null,
         count: maxCount,
       };
 
@@ -266,139 +264,6 @@ export class DashboardService {
     }
   }
 
-  async monthlyStats(month?: number, year?: number): Promise<any> {
-    try {
-      const { startDate: startOfMonth, endDate: endOfMonth } =
-        this.getMonthDateRange(month, year);
-
-      this.logger.log(
-        `Fetching monthly stats for ${startOfMonth.getFullYear()}-${startOfMonth.getMonth() + 1}`,
-      );
-
-      const monthlyData = await this.reservationModel.aggregate([
-        {
-          $match: {
-            createdAt: { $gte: startOfMonth, $lte: endOfMonth },
-          },
-        },
-        {
-          $group: {
-            _id: {
-              day: { $dayOfMonth: '$createdAt' },
-              status: '$status',
-            },
-            count: { $sum: 1 },
-          },
-        },
-        {
-          $group: {
-            _id: '$_id.day',
-            total: { $sum: '$count' },
-            byStatus: {
-              $push: {
-                status: '$_id.status',
-                count: '$count',
-              },
-            },
-          },
-        },
-        {
-          $sort: { _id: 1 },
-        },
-      ]);
-
-      const daysInMonth = new Date(
-        startOfMonth.getFullYear(),
-        startOfMonth.getMonth() + 1,
-        0,
-      ).getDate();
-
-      // Fill missing days with zero
-      const dailyData = Array.from({ length: daysInMonth }, (_, i) => {
-        const day = i + 1;
-        const existingData = monthlyData.find((d) => d._id === day);
-
-        if (existingData) {
-          const statusBreakdown = {};
-          existingData.byStatus.forEach((item) => {
-            statusBreakdown[item.status] = item.count;
-          });
-
-          return {
-            day,
-            total: existingData.total,
-            byStatus: statusBreakdown,
-          };
-        }
-
-        return {
-          day,
-          total: 0,
-          byStatus: {},
-        };
-      });
-
-      return {
-        month: startOfMonth.getMonth() + 1,
-        year: startOfMonth.getFullYear(),
-        dailyData,
-        totalReservations: dailyData.reduce((sum, day) => sum + day.total, 0),
-      };
-    } catch (error) {
-      this.logger.error('Error fetching monthly stats', error.stack);
-      throw new Error('Failed to fetch monthly statistics');
-    }
-  }
-
-  async getReservationsByDateRange(
-    startDate: Date,
-    endDate: Date,
-    status?: ReservationStatus,
-  ): Promise<ReservationDocument[]> {
-    try {
-      const query: any = {
-        createdAt: { $gte: startDate, $lte: endDate },
-      };
-
-      if (status) {
-        query.status = status;
-      }
-
-      return await this.reservationModel
-        .find(query)
-        .sort({ createdAt: -1 })
-        .populate('userId', 'name email')
-        .lean()
-        .exec();
-    } catch (error) {
-      this.logger.error(
-        'Error fetching reservations by date range',
-        error.stack,
-      );
-      throw new Error('Failed to fetch reservations by date range');
-    }
-  }
-
-  async getDashboardSummary(): Promise<any> {
-    try {
-      const [kpiData, todayReservations, weeklyStats] = await Promise.all([
-        this.getKpiData(),
-        this.getTodayReservations(),
-        this.weeklyStats(),
-      ]);
-
-      return {
-        kpi: kpiData,
-        today: todayReservations,
-        weekly: weeklyStats,
-        lastUpdated: new Date(),
-      };
-    } catch (error) {
-      this.logger.error('Error fetching dashboard summary', error.stack);
-      throw new Error('Failed to fetch dashboard summary');
-    }
-  }
-
   // Helper methods for date calculations
   private getTodayDateRange(): DateRange {
     const today = new Date();
@@ -421,19 +286,5 @@ export class DashboardService {
     endOfWeek.setHours(23, 59, 59, 999);
 
     return { startDate: startOfWeek, endDate: endOfWeek };
-  }
-
-  private getMonthDateRange(month?: number, year?: number): DateRange {
-    const now = new Date();
-    const targetMonth = month ?? now.getMonth();
-    const targetYear = year ?? now.getFullYear();
-
-    const startOfMonth = new Date(targetYear, targetMonth, 1);
-    startOfMonth.setHours(0, 0, 0, 0);
-
-    const endOfMonth = new Date(targetYear, targetMonth + 1, 0);
-    endOfMonth.setHours(23, 59, 59, 999);
-
-    return { startDate: startOfMonth, endDate: endOfMonth };
   }
 }

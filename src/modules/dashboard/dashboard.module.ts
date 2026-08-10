@@ -6,14 +6,12 @@ import {
   Reservation,
   ReservationSchema,
 } from 'src/schema/reservation/reservation.schema';
-import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: Reservation.name, schema: ReservationSchema },
     ]),
-    UsersModule,
   ],
   controllers: [DashboardController],
   providers: [DashboardService],

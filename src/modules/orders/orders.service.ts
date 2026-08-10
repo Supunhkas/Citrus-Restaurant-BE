@@ -3,9 +3,11 @@ import {
   Logger,
   OnModuleInit,
   BadRequestException,
+  NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { ConfigService } from '@nestjs/config';
 import { Model } from 'mongoose';
 import {
   PickupOrder,
@@ -34,6 +36,7 @@ export class OrdersService implements OnModuleInit {
     private readonly paymentsService: PaymentsService,
     private readonly menuService: MenuService,
     private readonly eventBusService: EventBusService,
+    private readonly configService: ConfigService,
   ) {}
 
   onModuleInit() {
@@ -108,19 +111,33 @@ export class OrdersService implements OnModuleInit {
       unknown
     >
   > {
+    // Payment is mandatory — reject before doing any price verification or
+    // writing an order to the database if Stripe is not configured.
+    if (!this.paymentsService.isInitialized) {
+      throw new ServiceUnavailableException(
+        'Online payment is currently unavailable. Please try again later.',
+      );
+    }
+
     // Re-fetch menu prices server-side to prevent client-supplied price manipulation
-    const TAX_RATE = 0.1; // 10% GST — keep in sync with frontend
+    const TAX_RATE =
+      this.configService.get<number>('orders.taxRate') ?? 0.1;
     let verifiedSubtotal = 0;
 
     const verifiedItems = await Promise.all(
       dto.items.map(async (item) => {
-        const menuItem = await this.menuService.getMenuItemById(
-          item.menuItemId,
-        );
-        if (!menuItem) {
-          throw new BadRequestException(
-            `Menu item not found: ${item.menuItemId}`,
-          );
+        let menuItem: Awaited<
+          ReturnType<typeof this.menuService.getMenuItemById>
+        >;
+        try {
+          menuItem = await this.menuService.getMenuItemById(item.menuItemId);
+        } catch (err) {
+          if (err instanceof NotFoundException) {
+            throw new BadRequestException(
+              `Menu item not found: ${item.menuItemId}`,
+            );
+          }
+          throw err;
         }
         if (!menuItem.isAvailable) {
           throw new BadRequestException(
@@ -137,6 +154,7 @@ export class OrdersService implements OnModuleInit {
       }),
     );
 
+    verifiedSubtotal = Math.round(verifiedSubtotal * 100) / 100;
     const verifiedTax = Math.round(verifiedSubtotal * TAX_RATE * 100) / 100;
     const verifiedTotal =
       Math.round((verifiedSubtotal + verifiedTax) * 100) / 100;
@@ -157,14 +175,6 @@ export class OrdersService implements OnModuleInit {
     this.logger.log(
       `Pickup order created (payment pending): ${saved.customerName} — $${saved.total.toFixed(2)}`,
     );
-
-    // Payment is mandatory — reject if Stripe is not configured
-    if (!this.paymentsService.isInitialized) {
-      await this.orderModel.findByIdAndDelete(saved._id);
-      throw new ServiceUnavailableException(
-        'Online payment is currently unavailable. Please try again later.',
-      );
-    }
 
     try {
       const session =
