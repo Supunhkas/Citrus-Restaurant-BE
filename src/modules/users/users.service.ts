@@ -84,10 +84,13 @@ export class UsersService {
     );
   }
 
-  async generatePasswordResetToken(email: string): Promise<string> {
+  // Returns null (instead of throwing) when the email isn't registered, so
+  // callers can return an identical response either way — throwing here let
+  // callers enumerate which emails exist via POST /auth/forgot-password.
+  async generatePasswordResetToken(email: string): Promise<string | null> {
     const user = await this.findByEmail(email);
     if (!user) {
-      throw new NotFoundException('User not found');
+      return null;
     }
 
     const resetToken = randomBytes(32).toString('hex');
@@ -115,6 +118,11 @@ export class UsersService {
     user.password = hashedPassword;
     user.passwordResetToken = undefined;
     user.passwordResetExpires = undefined;
+    // A password reset is meant to defend against a compromised account —
+    // that protection is incomplete if an attacker who already holds a
+    // stolen refresh token can keep using it afterward. Invalidate it so
+    // every device is forced to log in again with the new password.
+    user.refreshTokenHash = undefined;
     await user.save();
   }
 
@@ -243,20 +251,25 @@ export class UsersService {
   private readonly LOCK_DURATION_MS = 15 * 60 * 1000; // 15 minutes
 
   async recordFailedLogin(userId: string): Promise<void> {
-    const user = await this.userModel.findById(userId);
-    if (!user) return;
+    // Atomic $inc instead of read-modify-write: concurrent failed attempts
+    // (exactly what a brute-force sends) could otherwise all read the same
+    // stale count and each write back the same incremented value, letting
+    // the real attempt count exceed MAX_LOGIN_ATTEMPTS before locking.
+    const updated = await this.userModel.findByIdAndUpdate(
+      userId,
+      { $inc: { failedLoginAttempts: 1 } },
+      { new: true },
+    );
+    if (!updated) return;
 
-    const attempts = (user.failedLoginAttempts ?? 0) + 1;
-    const update: Record<string, unknown> = { failedLoginAttempts: attempts };
-
-    if (attempts >= this.MAX_LOGIN_ATTEMPTS) {
-      update.lockUntil = new Date(Date.now() + this.LOCK_DURATION_MS);
+    if (updated.failedLoginAttempts >= this.MAX_LOGIN_ATTEMPTS) {
+      await this.userModel.findByIdAndUpdate(userId, {
+        lockUntil: new Date(Date.now() + this.LOCK_DURATION_MS),
+      });
       this.logger.warn(
-        `Account locked due to ${attempts} failed attempts: ${user.email}`,
+        `Account locked due to ${updated.failedLoginAttempts} failed attempts: ${updated.email}`,
       );
     }
-
-    await this.userModel.findByIdAndUpdate(userId, update);
   }
 
   async clearFailedLogins(userId: string): Promise<void> {

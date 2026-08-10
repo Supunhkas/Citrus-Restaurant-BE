@@ -32,14 +32,14 @@ export class NotificationsGateway
   @WebSocketServer() server: Server;
   private readonly logger = new Logger(NotificationsGateway.name);
 
-  private allowedOrigin: string;
+  private allowedOrigins: string[];
 
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
   ) {
-    this.allowedOrigin =
-      this.configService.get<string>('app.url') || 'http://localhost:3000';
+    this.allowedOrigins =
+      this.configService.get<string[]>('cors.origin') || [];
   }
 
   afterInit(server: Server) {
@@ -49,7 +49,7 @@ export class NotificationsGateway
     server.use((socket: Socket, next) => {
       // Enforce origin
       const origin = socket.handshake.headers.origin;
-      if (origin && origin !== this.allowedOrigin) {
+      if (origin && !this.allowedOrigins.includes(origin)) {
         this.logger.warn(
           `WS connection rejected — disallowed origin: ${origin}`,
         );

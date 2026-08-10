@@ -96,14 +96,21 @@ export class AuthService {
     const { email, password } = loginDto;
 
     const user = await this.usersService.findByEmail(email);
-    if (!user?.isActive) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
 
-    if (!user.isEmailVerified) {
-      throw new UnauthorizedException(
-        'Please verify your email address before logging in',
-      );
+    // Password is checked before anything about account state is revealed.
+    // Checking isEmailVerified/isAccountLocked first (as this used to) lets
+    // an unauthenticated caller enumerate which emails are registered,
+    // verified, or locked out — none of that should be observable without
+    // first proving knowledge of the password.
+    const isPasswordValid = user?.isActive
+      ? await this.usersService.verifyPassword(password, user.password)
+      : false;
+
+    if (!user?.isActive || !isPasswordValid) {
+      if (user?.isActive) {
+        await this.usersService.recordFailedLogin(user._id.toString());
+      }
+      throw new UnauthorizedException('Invalid credentials');
     }
 
     if (this.usersService.isAccountLocked(user)) {
@@ -112,13 +119,10 @@ export class AuthService {
       );
     }
 
-    const isPasswordValid = await this.usersService.verifyPassword(
-      password,
-      user.password,
-    );
-    if (!isPasswordValid) {
-      await this.usersService.recordFailedLogin(user._id.toString());
-      throw new UnauthorizedException('Invalid credentials');
+    if (!user.isEmailVerified) {
+      throw new UnauthorizedException(
+        'Please verify your email address before logging in',
+      );
     }
 
     // Clear lockout on successful login
@@ -208,10 +212,17 @@ export class AuthService {
     const resetToken =
       await this.usersService.generatePasswordResetToken(email);
 
-    // Send password reset email
-    await this.emailService.sendPasswordReset(email, resetToken);
+    // Only send an email when the address is actually registered, but
+    // always return the same generic message either way — otherwise the
+    // response itself reveals which emails have an account.
+    if (resetToken) {
+      await this.emailService.sendPasswordReset(email, resetToken);
+    }
 
-    return { message: 'Password reset instructions sent to your email' };
+    return {
+      message:
+        'If an account exists for that email, password reset instructions have been sent.',
+    };
   }
 
   async resetPassword(

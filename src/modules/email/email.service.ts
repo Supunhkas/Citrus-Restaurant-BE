@@ -56,6 +56,9 @@ export class EmailService {
         user: emailConfig.auth.user,
         pass: emailConfig.auth.pass,
       },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 10000,
     });
 
     this.transporter.verify((error) => {

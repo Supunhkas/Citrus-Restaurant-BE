@@ -90,6 +90,23 @@ export class ReservationService implements OnModuleInit {
     return this.configService.get<string>('app.name') || 'Citrus Restaurant';
   }
 
+  // These were previously hardcoded (guests > 4, $30) even though
+  // reservation.depositThreshold/depositAmount already exist in
+  // configuration.ts — an operator changing RESERVATION_DEPOSIT_THRESHOLD or
+  // RESERVATION_DEPOSIT_AMOUNT had no effect. Centralized here so
+  // createReservation and confirmReservation can't drift from each other.
+  private getDepositThreshold(): number {
+    return Number(
+      this.configService.get<number>('reservation.depositThreshold') ?? 4,
+    );
+  }
+
+  private getDepositAmount(): number {
+    return Number(
+      this.configService.get<number>('reservation.depositAmount') ?? 30,
+    );
+  }
+
   // Helper: Send Expo push notification to all admins
   private async notifyAdminsExpo(
     title: string,
@@ -120,10 +137,17 @@ export class ReservationService implements OnModuleInit {
   }
 
   //! Create a new reservation
-  async createReservation(dto: CreateReservationDto): Promise<Reservation> {
+  async createReservation(
+    dto: CreateReservationDto,
+    userId?: string,
+  ): Promise<Reservation> {
     const reservationDate = new Date(dto.reservationDate);
     const now = new Date();
-    now.setHours(0, 0, 0, 0); // Start of today
+    // A date-only string like "2026-08-10" is parsed as UTC midnight, so
+    // "now" must be normalized the same way — setHours() uses local time
+    // and could reject a valid same-day booking (or let a past one through)
+    // depending on the server's timezone relative to UTC.
+    now.setUTCHours(0, 0, 0, 0); // Start of today, UTC
 
     // 1. Prevent past dates
     if (reservationDate < now) {
@@ -138,6 +162,19 @@ export class ReservationService implements OnModuleInit {
     }
 
     // 3. Prevent duplicate active reservations for same email/date/time
+    //
+    // NOTE (known limitation, not fixed here): this check-then-insert, and
+    // the capacity aggregation below it, are both plain reads with no
+    // transaction or unique constraint guarding the eventual save() — two
+    // concurrent requests for the same slot can both pass both checks and
+    // both insert. Closing this fully needs either a MongoDB
+    // session/transaction (only viable if this deployment's MongoDB runs as
+    // a replica set — standalone instances don't support multi-document
+    // transactions) or a unique index added as a verified migration against
+    // production data (a blind unique index could fail to build if
+    // duplicate active reservations already exist). Neither is safe to do
+    // without confirming the deployment topology and current data state
+    // first, so this is left as a documented gap rather than guessed at.
     const existing = await this.reservationModel.findOne({
       email: dto.email,
       reservationDate: dto.reservationDate,
@@ -212,13 +249,14 @@ export class ReservationService implements OnModuleInit {
       status: ReservationStatus.PENDING,
       notes: '',
       confirmationCode,
+      userId: userId ? new Types.ObjectId(userId) : undefined,
     });
     await reservation.save();
 
-    // Both types require a $30 deposit for 5+ guests; under 5 guests no payment needed
-    const DEPOSIT_AUD = 30;
-    const requiresPayment = reservation.guests > 4;
-    const paymentAmount = DEPOSIT_AUD;
+    // Both types require a deposit above the configured guest threshold;
+    // below it, no payment is needed.
+    const requiresPayment = reservation.guests > this.getDepositThreshold();
+    const paymentAmount = this.getDepositAmount();
 
     if (requiresPayment) {
       const session = await this.paymentsService.createCheckoutSession(
@@ -301,9 +339,9 @@ export class ReservationService implements OnModuleInit {
       throw new ConflictException('Reservation is not pending');
     }
 
-    // Extra safety: guests > 4 must have completed payment
+    // Extra safety: guests above the deposit threshold must have completed payment
     if (
-      reservation.guests > 4 &&
+      reservation.guests > this.getDepositThreshold() &&
       reservation.paymentStatus !== PaymentStatus.COMPLETED
     ) {
       throw new ConflictException(

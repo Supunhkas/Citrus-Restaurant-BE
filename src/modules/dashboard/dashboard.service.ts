@@ -51,7 +51,15 @@ export class DashboardService {
 
   async getKpiData(): Promise<KpiData> {
     try {
+      const ninetyDaysAgo = new Date();
+      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
       const kpiResults = await this.reservationModel.aggregate([
+        {
+          $match: {
+            reservationDate: { $gte: ninetyDaysAgo },
+          },
+        },
         {
           $group: {
             _id: null,

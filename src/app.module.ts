@@ -18,6 +18,10 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { PaymentsModule } from './modules/payments/payments.module';
 import { MenuModule } from './modules/menu/menu.module';
 import { OrdersModule } from './modules/orders/orders.module';
+// FirebaseModule initializes FirebaseService (FCM), but nothing currently calls it to send
+// notifications — Expo remains the active push channel. Wiring an actual FCM send path is a
+// separate follow-up; this import only fixes the module being dead infrastructure.
+import { FirebaseModule } from './modules/firebase/firebase.module';
 
 @Module({
   imports: [
@@ -54,6 +58,7 @@ import { OrdersModule } from './modules/orders/orders.module';
     PaymentsModule,
     MenuModule,
     OrdersModule,
+    FirebaseModule,
   ],
   controllers: [AppController],
   providers: [

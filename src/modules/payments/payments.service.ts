@@ -49,7 +49,7 @@ export class PaymentsService {
                 name: 'Restaurant Reservation Deposit',
                 description: `Deposit for reservation ID: ${reservationId}`,
               },
-              unit_amount: amount * 100,
+              unit_amount: Math.round(amount * 100),
             },
             quantity: 1,
           },
@@ -104,6 +104,10 @@ export class PaymentsService {
         cancel_url: `${appUrl}/order/payment-cancelled?order_id=${orderId}`,
         ...(customerEmail ? { customer_email: customerEmail } : {}),
         metadata: { orderId },
+        // Checkout sessions don't propagate metadata onto their PaymentIntent
+        // automatically — without this, a payment_intent.payment_failed
+        // webhook has no orderId to act on.
+        payment_intent_data: { metadata: { orderId } },
       });
 
       return session;

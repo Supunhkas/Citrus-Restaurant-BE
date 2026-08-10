@@ -52,6 +52,7 @@ export class AuthController {
 
   @Public()
   @Post('refresh')
+  @UseGuards(AuthThrottleGuard)
   @HttpCode(HttpStatus.OK)
   async refreshToken(
     @Body() body: { refreshToken: string },

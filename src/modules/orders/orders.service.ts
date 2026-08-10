@@ -62,6 +62,42 @@ export class OrdersService implements OnModuleInit {
         );
       },
     );
+
+    this.eventBusService.on(
+      'order.payment.failed',
+      ({ orderId }: { orderId: string }) => {
+        this.markPaymentFailed(orderId).catch((error) => {
+          this.logger.error(
+            `Unhandled error marking payment failed for order ${orderId}`,
+            error instanceof Error ? error.stack : String(error),
+          );
+        });
+      },
+    );
+  }
+
+  // Called when a Stripe checkout session expires or its payment fails
+  // outright, so an abandoned order doesn't sit in PAYMENT_PENDING forever
+  // with no way for an admin to clear it from the queue.
+  async markPaymentFailed(orderId: string): Promise<void> {
+    const updated = await this.orderModel.findOneAndUpdate(
+      {
+        _id: orderId,
+        paymentStatus: { $ne: PickupOrderPaymentStatus.COMPLETED },
+      },
+      {
+        $set: {
+          paymentStatus: PickupOrderPaymentStatus.FAILED,
+          status: PickupOrderStatus.CANCELLED,
+        },
+      },
+      { new: true },
+    );
+    if (updated) {
+      this.logger.log(
+        `Order ${orderId} marked FAILED/CANCELLED — checkout session expired or payment failed`,
+      );
+    }
   }
 
   async createPickupOrder(
@@ -165,33 +201,58 @@ export class OrdersService implements OnModuleInit {
       return;
     }
 
-    // Idempotency: skip if already processed
-    if (order.paymentStatus === PickupOrderPaymentStatus.COMPLETED) {
+    // Amount verification: Stripe uses cents
+    const expectedCents = Math.round(order.total * 100);
+    if (amountTotal !== expectedCents) {
+      this.logger.error(
+        `Payment amount mismatch for order ${orderId}: expected ${expectedCents} cents, got ${amountTotal} cents — marking FAILED for manual review`,
+      );
+      // Mark it visibly wrong instead of leaving it silently PENDING forever
+      // — the controller has already returned 200 to Stripe by this point,
+      // so nothing else will surface this order again on its own.
+      await this.orderModel.updateOne(
+        {
+          _id: orderId,
+          paymentStatus: { $ne: PickupOrderPaymentStatus.COMPLETED },
+        },
+        { $set: { paymentStatus: PickupOrderPaymentStatus.FAILED } },
+      );
+      return;
+    }
+
+    // Idempotency + concurrency safety in one step. Stripe delivers webhooks
+    // at-least-once, so two deliveries for the same session can race here;
+    // a plain findById + save (read-then-write) lets both readers see
+    // paymentStatus still PENDING and both proceed, double-firing admin
+    // notifications. Guarding the update itself on paymentStatus not already
+    // COMPLETED means only the first delivery actually applies.
+    const updated = await this.orderModel.findOneAndUpdate(
+      {
+        _id: orderId,
+        paymentStatus: { $ne: PickupOrderPaymentStatus.COMPLETED },
+      },
+      {
+        $set: {
+          paymentStatus: PickupOrderPaymentStatus.COMPLETED,
+          status: PickupOrderStatus.PENDING,
+          stripeSessionId,
+        },
+      },
+      { new: true },
+    );
+
+    if (!updated) {
       this.logger.warn(
         `Duplicate webhook for order ${orderId} (session ${stripeSessionId}) — already processed`,
       );
       return;
     }
 
-    // Amount verification: Stripe uses cents
-    const expectedCents = Math.round(order.total * 100);
-    if (amountTotal !== expectedCents) {
-      this.logger.error(
-        `Payment amount mismatch for order ${orderId}: expected ${expectedCents} cents, got ${amountTotal} cents`,
-      );
-      return;
-    }
-
-    order.paymentStatus = PickupOrderPaymentStatus.COMPLETED;
-    order.status = PickupOrderStatus.PENDING;
-    order.stripeSessionId = stripeSessionId;
-    await order.save();
-
     this.logger.log(`Payment confirmed — order ready for admin: ${orderId}`);
 
     // Notify admin now that payment is confirmed
-    this.notificationsGateway.notifyPickupOrder(order);
-    await this.notifyAdminsExpo(order);
+    this.notificationsGateway.notifyPickupOrder(updated);
+    await this.notifyAdminsExpo(updated);
   }
 
   async getOrderPaymentStatus(
@@ -219,8 +280,14 @@ export class OrdersService implements OnModuleInit {
     page: number;
   }> {
     const filter = status ? { status } : {};
-    const safePage = Math.max(1, page);
-    const safeLimit = Math.min(Math.max(1, limit), 100);
+    // parseInt on a non-numeric query param (e.g. ?page=abc) yields NaN, and
+    // Math.max/Math.min propagate NaN rather than clamping it — passing NaN
+    // to Mongo's skip()/limit() then throws at the driver level instead of
+    // falling back to a sane default.
+    const safePage = Number.isFinite(page) ? Math.max(1, page) : 1;
+    const safeLimit = Number.isFinite(limit)
+      ? Math.min(Math.max(1, limit), 100)
+      : 50;
     const skip = (safePage - 1) * safeLimit;
 
     const [data, total] = await Promise.all([
@@ -240,6 +307,10 @@ export class OrdersService implements OnModuleInit {
   private static readonly VALID_TRANSITIONS: Partial<
     Record<PickupOrderStatus, PickupOrderStatus[]>
   > = {
+    // Without this, an order stuck in PAYMENT_PENDING (an abandoned or
+    // failed Stripe checkout) could never be moved anywhere — including
+    // CANCELLED — leaving admins with no way to clear it from the queue.
+    [PickupOrderStatus.PAYMENT_PENDING]: [PickupOrderStatus.CANCELLED],
     [PickupOrderStatus.PENDING]: [
       PickupOrderStatus.CONFIRMED,
       PickupOrderStatus.CANCELLED,

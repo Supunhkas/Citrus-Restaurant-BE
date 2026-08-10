@@ -23,6 +23,7 @@ import {
 } from './dto/menu-category.dto';
 import { CreateMenuItemDto } from './dto/create-menu-item.dto';
 import { UpdateMenuItemDto } from './dto/update-menu-item.dto';
+import { SeedMenuDto } from './dto/seed-menu.dto';
 
 @Controller('menu')
 export class MenuController {
@@ -32,7 +33,11 @@ export class MenuController {
   @Public()
   @Get('items')
   getMenuItems(@Query() query: MenuQueryDto) {
-    return this.menuService.getMenuItems(query);
+    // `available` is an admin-only override (see
+    // MenuAdminController.getAllItemsForAdmin below, which forces it
+    // server-side) — a public, unauthenticated caller must never be able to
+    // pull unavailable/86'd items by passing ?available=false themselves.
+    return this.menuService.getMenuItems({ ...query, available: undefined });
   }
 
   // GET /menu/items/:id
@@ -129,13 +134,7 @@ export class MenuAdminController {
 
   @Post('seed')
   @HttpCode(HttpStatus.OK)
-  seed(
-    @Body()
-    body: {
-      items: CreateMenuItemDto[];
-      categories: CreateMenuCategoryDto[];
-    },
-  ) {
+  seed(@Body() body: SeedMenuDto) {
     return this.menuService.seed(body.items, body.categories);
   }
 }

@@ -71,6 +71,23 @@ export class PaymentsController {
           'Stripe webhook: no orderId or reservationId in metadata',
         );
       }
+    } else if (
+      event.type === 'checkout.session.expired' ||
+      event.type === 'payment_intent.payment_failed'
+    ) {
+      // Previously unhandled: an abandoned or declined checkout left the
+      // order sitting in PAYMENT_PENDING forever with no way to clear it.
+      // Only pickup orders have a defined FAILED/CANCELLED path today —
+      // reservations' payment-failure handling is a separate follow-up.
+      const session = event.data.object as any;
+      const orderId = session.metadata?.orderId;
+
+      if (orderId) {
+        this.logger.warn(
+          `Stripe ${event.type} for pickup order: ${orderId}`,
+        );
+        this.eventBusService.emit('order.payment.failed', { orderId });
+      }
     }
 
     res.status(HttpStatus.OK).json({ received: true });
