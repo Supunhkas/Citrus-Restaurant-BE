@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerStorageService } from '@nestjs/throttler';
 
@@ -11,7 +11,19 @@ import { ThrottlerGuard, ThrottlerStorageService } from '@nestjs/throttler';
 // than reusing the globally-injected config.
 @Injectable()
 export class AuthThrottleGuard extends ThrottlerGuard {
-  constructor(storageService: ThrottlerStorageService, reflector: Reflector) {
+  // ThrottlerGuard's own constructor applies @InjectThrottlerOptions()/
+  // @InjectThrottlerStorage() to its parameters 0 and 1. Reflect's metadata
+  // lookup walks the prototype chain, so without explicit @Inject() here,
+  // Nest resolves THIS subclass's parameters using the PARENT's decorators
+  // at the same positions — silently injecting the wrong values (the
+  // storage service ends up bound to the `reflector` parameter here,
+  // producing "this.reflector.getAllAndOverride is not a function" at
+  // request time). Explicit @Inject() on both parameters overrides that
+  // inherited metadata.
+  constructor(
+    @Inject(ThrottlerStorageService) storageService: ThrottlerStorageService,
+    @Inject(Reflector) reflector: Reflector,
+  ) {
     super(
       { throttlers: [{ name: 'auth', ttl: 60 * 1000, limit: 5 }] },
       storageService,

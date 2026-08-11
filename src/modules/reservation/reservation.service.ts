@@ -549,7 +549,11 @@ export class ReservationService implements OnModuleInit {
   }
 
   //! Resend confirmation
-  async resendConfirmation(contact: string): Promise<void> {
+  async resendConfirmation(contact: string): Promise<{ message: string }> {
+    const genericResponse = {
+      message: 'If a pending reservation exists for that contact, a confirmation code has been resent.',
+    };
+
     const reservation = await this.reservationModel.findOne({
       $or: [{ contactNumber: contact }, { email: contact }],
       status: ReservationStatus.PENDING,
@@ -557,7 +561,7 @@ export class ReservationService implements OnModuleInit {
     if (!reservation) {
       // Always return the same generic outcome whether or not a match was
       // found, so callers can't enumerate contacts by probing this endpoint.
-      return;
+      return genericResponse;
     }
 
     if (reservation.email) {
@@ -573,6 +577,8 @@ export class ReservationService implements OnModuleInit {
       });
     }
     // TODO: Integrate SMS sending if required
+
+    return genericResponse;
   }
 
   async handlePaymentSuccess(

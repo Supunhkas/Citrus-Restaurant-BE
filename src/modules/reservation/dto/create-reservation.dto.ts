@@ -10,6 +10,7 @@ import {
   Min,
   Max,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { ReservationType } from '../../../schema/reservation/reservation.schema';
 
 export class CreateReservationDto {
@@ -25,6 +26,19 @@ export class CreateReservationDto {
   @IsEmail()
   email: string;
 
+  // The frontend's reservation form always submits this field via
+  // FormData, even when the user never filled it in — an empty string, not
+  // absent. The global ValidationPipe's enableImplicitConversion runs
+  // BEFORE this @Transform sees the value (verified empirically — a
+  // '' === '' check here never matched), coercing '' to 0 first. A real
+  // table number is never 0, so treat 0 the same as '' / null / undefined:
+  // not provided. Without this, @IsOptional() never skips @Min(1) and
+  // every reservation without a table number gets rejected.
+  @Transform(({ value }) =>
+    value === '' || value === null || value === undefined || value === 0
+      ? undefined
+      : value,
+  )
   @IsOptional()
   @IsNumber()
   @Min(1)
