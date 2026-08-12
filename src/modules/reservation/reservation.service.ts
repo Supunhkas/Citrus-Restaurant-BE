@@ -108,6 +108,18 @@ export class ReservationService implements OnModuleInit {
     );
   }
 
+  // Same centralization principle as the two getters above, extended to the
+  // bypass flag: createReservation and confirmReservation both gate on
+  // "does this booking need a deposit" and must never drift from each other,
+  // or a >threshold reservation created while bypassed could pass creation
+  // but then be permanently rejected at confirmation time.
+  private requiresDeposit(guests: number): boolean {
+    const bypassed =
+      this.configService.get<boolean>('payments.reservationBypassEnabled') ??
+      false;
+    return !bypassed && guests > this.getDepositThreshold();
+  }
+
   // Helper: Send Expo push notification to all admins
   private async notifyAdminsExpo(
     title: string,
@@ -256,7 +268,7 @@ export class ReservationService implements OnModuleInit {
 
     // Both types require a deposit above the configured guest threshold;
     // below it, no payment is needed.
-    const requiresPayment = reservation.guests > this.getDepositThreshold();
+    const requiresPayment = this.requiresDeposit(reservation.guests);
     const paymentAmount = this.getDepositAmount();
 
     if (requiresPayment) {
@@ -342,7 +354,7 @@ export class ReservationService implements OnModuleInit {
 
     // Extra safety: guests above the deposit threshold must have completed payment
     if (
-      reservation.guests > this.getDepositThreshold() &&
+      this.requiresDeposit(reservation.guests) &&
       reservation.paymentStatus !== PaymentStatus.COMPLETED
     ) {
       throw new ConflictException(

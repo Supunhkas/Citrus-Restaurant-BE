@@ -31,6 +31,12 @@ STRIPE_SECRET_KEY=sk_live_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 STRIPE_CURRENCY=aud
 
+# Temporary payment bypass (remove once Stripe is live) — "true" skips Stripe
+# entirely and sends pickup orders / reservations straight to the admin
+# approve/reject queue instead. Anything else (or unset) keeps Stripe required.
+PICKUP_PAYMENT_BYPASS=false
+RESERVATION_PAYMENT_BYPASS=false
+
 # Frontend URL (for redirects)
 FRONTEND_URL=https://your-domain.com
 

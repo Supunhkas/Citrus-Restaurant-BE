@@ -59,6 +59,11 @@ export default () => ({
   orders: {
     taxRate: Number(process.env.ORDER_TAX_RATE) || 0.1,
   },
+  payments: {
+    pickupBypassEnabled: process.env.PICKUP_PAYMENT_BYPASS === 'true',
+    reservationBypassEnabled:
+      process.env.RESERVATION_PAYMENT_BYPASS === 'true',
+  },
   security: {
     helmet: {
       contentSecurityPolicy: {

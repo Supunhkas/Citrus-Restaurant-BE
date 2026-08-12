@@ -111,9 +111,14 @@ export class OrdersService implements OnModuleInit {
       unknown
     >
   > {
+    const bypassEnabled = this.configService.get<boolean>(
+      'payments.pickupBypassEnabled',
+    );
+
     // Payment is mandatory — reject before doing any price verification or
-    // writing an order to the database if Stripe is not configured.
-    if (!this.paymentsService.isInitialized) {
+    // writing an order to the database if Stripe is not configured. Skipped
+    // entirely while payments.pickupBypassEnabled is on.
+    if (!bypassEnabled && !this.paymentsService.isInitialized) {
       throw new ServiceUnavailableException(
         'Online payment is currently unavailable. Please try again later.',
       );
@@ -159,18 +164,42 @@ export class OrdersService implements OnModuleInit {
     const verifiedTotal =
       Math.round((verifiedSubtotal + verifiedTax) * 100) / 100;
 
-    // Save order initially with payment_pending status
+    // Save order initially with payment_pending status (or, while bypassed,
+    // straight into pending — the same status a Stripe payment would land it
+    // in via handlePaymentSuccess — so it appears in the admin queue exactly
+    // like a paid order would).
     const order = new this.orderModel({
       ...dto,
       items: verifiedItems,
       subtotal: verifiedSubtotal,
       tax: verifiedTax,
       total: verifiedTotal,
-      status: PickupOrderStatus.PAYMENT_PENDING,
-      paymentStatus: PickupOrderPaymentStatus.PENDING,
+      status: bypassEnabled
+        ? PickupOrderStatus.PENDING
+        : PickupOrderStatus.PAYMENT_PENDING,
+      paymentStatus: bypassEnabled
+        ? PickupOrderPaymentStatus.NONE
+        : PickupOrderPaymentStatus.PENDING,
       paymentAmount: verifiedTotal,
     });
     const saved = await order.save();
+
+    if (bypassEnabled) {
+      this.logger.log(
+        `Pickup order created (payment bypassed): ${saved.customerName} — $${saved.total.toFixed(2)}`,
+      );
+
+      // No Stripe webhook will ever fire for this order, so send the same
+      // admin notifications handlePaymentSuccess would have sent once
+      // payment cleared.
+      this.notificationsGateway.notifyPickupOrder(saved);
+      await this.notifyAdminsExpo(saved);
+
+      return {
+        ...saved.toObject(),
+        paymentRequired: false,
+      };
+    }
 
     this.logger.log(
       `Pickup order created (payment pending): ${saved.customerName} — $${saved.total.toFixed(2)}`,
